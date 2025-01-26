@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Single-Question Quiz (Score & Always Show Explanation)</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      font-family: sans-serif;
+    }
+
+    .quiz-container {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 1rem;
+      text-align: center; /* ensures text (e.g. question) is centered */
+    }
+
+    h1 {
+      margin-bottom: 0.5rem;
+    }
+
+    /* Score display at the top */
+    .score-display {
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin: 0.5rem 0;
+    }
+
+    /* Map container used both for main map and previews */
+    .map-container {
+      position: relative;
+      margin: 0 auto 1rem;
+      width: 70%;          
+      max-width: 1000px;
+    }
+
+    .map-container img.map-image {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    @media (orientation: portrait) {
+      .map-container {
+        width: 90%;
+      }
+    }
+
+    .objective-icon {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      transform: translate(-50%, -50%);
+    }
+    .full-opacity {
+      opacity: 1.0;
+    }
+
+    .question-block {
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+
+    @media (orientation: portrait) {
+        .question-block {
+        font-size: 32px;
+      }
+    }
+
+    .answers-row {
+      display: flex;
+      gap: 4rem;
+      margin-bottom: 1rem;
+      justify-content: center;
+    }
+    .answer-btn,#nextQuestionBtn {
+      padding: 0.3rem 1rem;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      transform: skewX(-10deg);
+    }
+
+    #nextQuestionBtn {
+        color: black;
+    }
+
+    @media (orientation: portrait) {
+      .answer-btn,#nextQuestionBtn {
+        font-size: 32px;
+      }
+    }
+    .answer-btn.true {
+      background-color: #28a745; /* green */
+    }
+    .answer-btn.false {
+      background-color: #dc3545; /* red */
+    }
+    .answer-btn.not-sure {
+      background-color: #fd7e14; /* orange */
+    }
+
+    .result {
+      margin-top: 8px;
+      font-weight: bold;
+    }
+    .hidden {
+      display: none;
+    }
+
+    .buttons {
+      margin-top: 10px;
+    }
+
+    /* Matching layouts preview area */
+    .matching-layouts-container {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+    }
+    .layout-preview {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: center;
+      width: 100%;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .layout-preview h4 {
+      margin: 0.5rem 0;
+    }
+
+    /* Smaller icons and narrower map for phones/tablets */
+    @media (max-width: 768px) {
+      .map-container {
+        max-width: 100%;
+      }
+      .objective-icon {
+        width: 30px;
+        height: 30px;
+      }
+      .answer-btn {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="quiz-container">
+  <h1>Cipher Spawn Quiz</h1>
+  <p>Note: The question always displays a possible cipher layout</p>
+  <!-- Score out of 10 -->
+  <div class="score-display" id="scoreDisplay">Score: 0 / 10</div>
+
+  <!-- Main map -->
+  <div class="map-container" id="mainMapContainer">
+    <img src="maps/armsfactory.png" alt="Arms Factory Map" class="map-image" id="mapImage">
+  </div>
+
+  <div class="question-block" id="questionText"></div>
+
+  <div class="answers-row">
+    <button class="answer-btn true" data-answer="True">True</button>
+    <button class="answer-btn false" data-answer="False">False</button>
+    <button class="answer-btn not-sure" data-answer="NotSure">Not known</button>
+  </div>
+
+  <div class="result hidden" id="resultDiv"></div>
+
+  <div class="buttons">
+    <button id="nextQuestionBtn" class="hidden">Next</button>
+  </div>
+
+  <div id="matchingLayoutsContainer" class="matching-layouts-container hidden"></div>
+</div>
+
+<script>
+// -------------------------
+// 1) Data
+// -------------------------
+const layouts = [
+  { A: 1, B: 1, C: 0, D: 0, E: 0, F: 0, G: 1, H: 1, I: 1, J: 1, K: 0, L: 1 },
+  { A: 1, B: 0, C: 0, D: 1, E: 0, F: 1, G: 1, H: 0, I: 1, J: 1, K: 0, L: 1 },
+  { A: 0, B: 1, C: 1, D: 1, E: 0, F: 0, G: 0, H: 1, I: 1, J: 1, K: 0, L: 1 },
+  { A: 1, B: 0, C: 1, D: 0, E: 1, F: 1, G: 0, H: 1, I: 0, J: 1, K: 1, L: 0 },
+  { A: 0, B: 1, C: 0, D: 0, E: 1, F: 0, G: 1, H: 1, I: 1, J: 1, K: 1, L: 0 }
+];
+
+const objectiveKeys = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+
+const objectiveAliases = {
+  A: "deep shack",
+  B: "no man's",
+  C: "lockers",
+  D: "shack",
+  E: "shack ruins",
+  F: "outside middle",
+  G: "front gate",
+  H: "middle",
+  I: "deep sandbags",
+  J: "sandbags",
+  K: "factory",
+  L: "inside factory"
+};
+
+const objectivePositions = {
+  A: { left: 315, top: 84 },
+  B: { left: 610, top: 120 },
+  C: { left: 810, top: 220 },
+  D: { left: 320, top: 240 },
+  E: { left: 220, top: 320 },
+  F: { left: 620, top: 410 },
+  G: { left: 850, top: 340 },
+  H: { left: 540, top: 510 },
+  I: { left: 120, top: 670 },
+  J: { left: 380, top: 730 },
+  K: { left: 750, top: 720 },
+  L: { left: 700, top: 790 }
+};
+
+// We'll do 10 questions
+const TOTAL_QUESTIONS = 10;
+let currentScore = 0;
+
+// -------------------------
+// 2) Generate random "spawn?" questions
+// -------------------------
+function generateQuizQuestions(numQuestions) {
+  const questions = [];
+  let attempts = 0;
+
+  while (questions.length < numQuestions && attempts < 500) {
+    attempts++;
+
+    // random condition size
+    const conditionSize = getRandomInt(1, 3);
+    const shuffled = shuffleArray([...objectiveKeys]);
+    const conditionObjs = shuffled.slice(0, conditionSize);
+
+    const conditionStates = {};
+    conditionObjs.forEach(obj => {
+      conditionStates[obj] = getRandomInt(0, 1);
+    });
+
+    const matchingLayouts = layouts.filter(ly => {
+      return conditionObjs.every(obj => ly[obj] === conditionStates[obj]);
+    });
+    if (matchingLayouts.length === 0) continue;
+
+    const possibleResults = objectiveKeys.filter(k => !conditionObjs.includes(k));
+    if (possibleResults.length === 0) continue;
+    const resultObj = possibleResults[getRandomInt(0, possibleResults.length - 1)];
+
+    // resultState=1 => "does X spawn?"
+    const resultState = 1;
+    const totalMatches = matchingLayouts.length;
+    const matchesWithResult = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
+    let correctAnswer;
+    if (matchesWithResult === totalMatches) {
+      correctAnswer = 'True';
+    } else if (matchesWithResult === 0) {
+      correctAnswer = 'False';
+    } else {
+      correctAnswer = 'NotSure';
+    }
+
+    const text = buildQuestionText(conditionStates, resultObj);
+
+    questions.push({
+      text,
+      conditionStates,
+      resultObj,
+      resultState,
+      correctAnswer,
+      matchingLayouts
+    });
+  }
+  return questions;
+}
+
+function buildQuestionText(conditionStates, resultObj) {
+  const condParts = Object.keys(conditionStates).map(key => {
+    const alias = `<strong>${objectiveAliases[key]}</strong>`;
+    return (conditionStates[key] === 1)
+      ? `${alias} spawns`
+      : `${alias} doesn't spawn`;
+  });
+  const condString = condParts.join(' and ');
+  const resultAlias = `<strong>${objectiveAliases[resultObj]}</strong>`;
+  return `If ${condString}, does ${resultAlias} spawn?`;
+}
+
+// For the explanation
+function capitalizeFirst(str) {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function buildElaborateExplanation(question) {
+  const { conditionStates, resultObj, matchingLayouts } = question;
+  const totalMatches = matchingLayouts.length;
+  const matchCount = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
+
+  const condParts = Object.keys(conditionStates).map(key => {
+    const alias = `<strong>${objectiveAliases[key]}</strong>`;
+    return conditionStates[key] === 1
+      ? `${alias} spawns`
+      : `${alias} doesn't spawn`;
+  });
+  const whenPhrase = (condParts.length > 0)
+    ? ' when ' + condParts.join(' and ')
+    : '';
+
+  const rawAlias = objectiveAliases[resultObj];
+  const capAlias = capitalizeFirst(rawAlias);
+  const resultAlias = `<strong>${capAlias}</strong>`;
+
+  const ratio = matchCount / totalMatches;
+  if (ratio === 1) {
+    return `${resultAlias} always spawns${whenPhrase}`;
+  } else if (ratio === 0) {
+    return `${resultAlias} never spawns${whenPhrase}`;
+  } else {
+    const pct = Math.round(ratio * 100);
+    return `${resultAlias} has a ${pct}% chance to spawn${whenPhrase}`;
+  }
+}
+
+// Utility
+function getRandomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// -------------------------
+// 3) Main quiz logic
+// -------------------------
+let questions = generateQuizQuestions(TOTAL_QUESTIONS);
+let currentQuestionIndex = 0;
+let questionAnswered = false; // track if first attempt was correct for this question
+
+const scoreDisplay = document.getElementById('scoreDisplay');
+const mainMapContainer = document.getElementById('mainMapContainer');
+const questionTextEl = document.getElementById('questionText');
+const resultDiv = document.getElementById('resultDiv');
+const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+const matchingLayoutsContainer = document.getElementById('matchingLayoutsContainer');
+
+// Show first question
+showQuestion(0);
+
+nextQuestionBtn.addEventListener('click', () => {
+  currentQuestionIndex++;
+  if (currentQuestionIndex < questions.length) {
+    showQuestion(currentQuestionIndex);
+  } else {
+    // End of quiz
+    questionTextEl.innerHTML = `Quiz complete! You scored ${currentScore} out of ${TOTAL_QUESTIONS}.`;
+    mainMapContainer.classList.add('hidden');
+    document.querySelector('.answers-row').classList.add('hidden');
+    nextQuestionBtn.classList.add('hidden');
+    matchingLayoutsContainer.classList.add('hidden');
+  }
+});
+
+document.querySelectorAll('.answer-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    if (questionAnswered) {
+      return; // ignore subsequent attempts
+    }
+    const userChoice = e.currentTarget.dataset.answer;
+    checkAnswer(userChoice);
+  });
+});
+
+function showQuestion(qIndex) {
+  questionAnswered = false;
+  resultDiv.textContent = '';
+  resultDiv.classList.add('hidden');
+  nextQuestionBtn.classList.add('hidden');
+  matchingLayoutsContainer.innerHTML = '';
+  matchingLayoutsContainer.classList.add('hidden');
+
+  const q = questions[qIndex];
+  questionTextEl.innerHTML = `Question ${qIndex + 1}: ${q.text}`;
+
+  clearIcons(mainMapContainer);
+  renderQuestionIcons(q);
+}
+
+function renderQuestionIcons(question) {
+  const { conditionStates, resultObj } = question;
+  const mainMapImg = document.getElementById('mapImage');
+
+  if (mainMapImg.complete) {
+    placeIconsNow();
+  } else {
+    mainMapImg.addEventListener('load', placeIconsNow, { once: true });
+  }
+
+  function placeIconsNow() {
+    const scale = mainMapImg.clientWidth / 1012;
+    // condition icons
+    for (const [objKey, spawnState] of Object.entries(conditionStates)) {
+      const iconName = spawnState === 1 ? 'icon.png' : 'icon_absent.png';
+      addIcon(mainMapContainer, objKey, iconName, scale);
+    }
+    // question icon
+    addIcon(mainMapContainer, resultObj, 'icon_question.png', scale);
+  }
+}
+
+function addIcon(container, objKey, imageFile, scale) {
+  const pos = objectivePositions[objKey];
+  if (!pos) return;
+  const icon = document.createElement('img');
+  icon.classList.add('objective-icon', 'full-opacity');
+  icon.src = imageFile;
+  icon.style.left = (pos.left * scale) + 'px';
+  icon.style.top  = (pos.top * scale) + 'px';
+  container.appendChild(icon);
+}
+
+function clearIcons(container) {
+  container.querySelectorAll('.objective-icon').forEach(icon => icon.remove());
+}
+
+function checkAnswer(userChoice) {
+  const q = questions[currentQuestionIndex];
+  const correct = q.correctAnswer;
+  questionAnswered = true; // user is making the first attempt
+
+  // If correct => +1
+  let correctStr = correct;
+  if (correct === 'NotSure') {
+    correctStr = 'Not known';
+  }
+
+  // Build the elaborate explanation in black
+  const explanation = buildElaborateExplanation(q);
+  const explanationHtml = `<div style="color: black; margin-top: 0.5rem;">${explanation}</div>`;
+
+  if (userChoice === correct) {
+    currentScore++;
+    updateScoreDisplay();
+
+    // "Correct!" in green, plus explanation in black
+    resultDiv.innerHTML = `<span style="color: green;">Correct!</span>${explanationHtml}`;
+  } else {
+    // "Incorrect..." in red, plus the same explanation in black
+    resultDiv.innerHTML = `<span style="color: red;">Incorrect. Correct answer: ${correctStr}.</span>${explanationHtml}`;
+  }
+
+  resultDiv.classList.remove('hidden');
+
+  // Show matching layouts
+  renderMatchingLayouts(q);
+  nextQuestionBtn.classList.remove('hidden');
+}
+
+function updateScoreDisplay() {
+  scoreDisplay.textContent = `Score: ${currentScore} / ${TOTAL_QUESTIONS}`;
+}
+
+// Show each layout that matches
+function renderMatchingLayouts(question) {
+  matchingLayoutsContainer.innerHTML = '';
+  matchingLayoutsContainer.classList.remove('hidden');
+
+  const { matchingLayouts } = question;
+  matchingLayouts.forEach((ly, idx) => {
+    const previewDiv = document.createElement('div');
+    previewDiv.classList.add('layout-preview');
+
+    const label = document.createElement('h4');
+    label.textContent = `Possible layout ${idx + 1}`;
+    previewDiv.appendChild(label);
+
+    const mapContainer = document.createElement('div');
+    mapContainer.classList.add('map-container');
+
+    const mapImg = document.createElement('img');
+    mapImg.classList.add('map-image');
+    mapImg.src = 'maps/armsfactory.png';
+
+    mapContainer.appendChild(mapImg);
+    previewDiv.appendChild(mapContainer);
+
+    mapImg.addEventListener('load', () => {
+      const scale = mapImg.clientWidth / 1012;
+      objectiveKeys.forEach(objKey => {
+        if (ly[objKey] === 1) {
+          addIcon(mapContainer, objKey, 'icon.png', scale);
+        }
+      });
+    });
+
+    matchingLayoutsContainer.appendChild(previewDiv);
+  });
+}
+</script>
+</body>
+</html>

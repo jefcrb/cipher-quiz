@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Objective Layout Demo (Arms Factory)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+    }
+    .map-container {
+      position: relative;
+      display: inline-block;
+    }
+    .map-image {
+      width: 1012px; /* Adjust as needed */
+      height: auto;
+      display: block;
+    }
+    .objective-icon {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+    }
+    /* Default unknown => lower opacity */
+    .objective-icon.unknown {
+      opacity: 0.3;
+    }
+    /* Present => full opacity */
+    .objective-icon.enabled {
+      opacity: 1.0;
+    }
+    /* Absent => full opacity */
+    .objective-icon.disabled {
+      opacity: 1.0;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Objective Layout Demo (Arms Factory)</h1>
+<p>
+  Click an icon to cycle states:
+  <strong>Unknown</strong> → <strong>Present</strong> → <strong>Absent</strong> → <strong>Unknown</strong>
+</p>
+
+<div class="map-container">
+  <!-- Replace with your actual map path -->
+  <img src="maps/armsfactory.png" alt="Arms Factory Map" class="map-image">
+
+  <!-- Example absolute-positioned icons (all default to 'icon.png' initially) -->
+  <img id="icon-A" class="objective-icon unknown" src="icon.png" style="left: 295px; top: 64px;" />
+  <img id="icon-B" class="objective-icon unknown" src="icon.png" style="left: 590px; top: 100px;" />
+  <img id="icon-C" class="objective-icon unknown" src="icon.png" style="left: 790px; top: 200px;" />
+  <img id="icon-D" class="objective-icon unknown" src="icon.png" style="left: 300px; top: 220px;" />
+  <img id="icon-E" class="objective-icon unknown" src="icon.png" style="left: 200px; top: 300px;" />
+  <img id="icon-F" class="objective-icon unknown" src="icon.png" style="left: 600px; top: 390px;" />
+  <img id="icon-G" class="objective-icon unknown" src="icon.png" style="left: 830px; top: 320px;" />
+  <img id="icon-H" class="objective-icon unknown" src="icon.png" style="left: 520px; top: 490px;" />
+  <img id="icon-I" class="objective-icon unknown" src="icon.png" style="left: 100px; top: 650px;" />
+  <img id="icon-J" class="objective-icon unknown" src="icon.png" style="left: 360px; top: 710px;" />
+  <img id="icon-K" class="objective-icon unknown" src="icon.png" style="left: 730px; top: 700px;" />
+  <img id="icon-L" class="objective-icon unknown" src="icon.png" style="left: 680px; top: 770px;" />
+</div>
+
+<script>
+  // Layout data: 1 = present, 0 = absent
+  const layouts = [
+    { A: 1, B: 1, C: 0, D: 0, E: 0, F: 0, G: 1, H: 1, I: 1, J: 1, K: 0, L: 1 },
+    { A: 1, B: 0, C: 0, D: 1, E: 0, F: 1, G: 1, H: 0, I: 1, J: 1, K: 0, L: 1 },
+    { A: 0, B: 1, C: 1, D: 1, E: 0, F: 0, G: 0, H: 1, I: 1, J: 1, K: 0, L: 1 },
+    { A: 1, B: 0, C: 1, D: 0, E: 1, F: 1, G: 0, H: 1, I: 0, J: 1, K: 1, L: 0 },
+    { A: 0, B: 1, C: 0, D: 0, E: 1, F: 0, G: 1, H: 1, I: 1, J: 1, K: 1, L: 0 }
+  ];
+
+  // Possible states: 'unknown', 'yes', 'no'
+  let objectiveStates = {
+    A: 'unknown',
+    B: 'unknown',
+    C: 'unknown',
+    D: 'unknown',
+    E: 'unknown',
+    F: 'unknown',
+    G: 'unknown',
+    H: 'unknown',
+    I: 'unknown',
+    J: 'unknown',
+    K: 'unknown',
+    L: 'unknown'
+  };
+
+  // Cycle states in this order: unknown -> yes -> no -> unknown
+  function toggleObjectiveState(objKey) {
+    const current = objectiveStates[objKey];
+    if (current === 'unknown')      objectiveStates[objKey] = 'yes';
+    else if (current === 'yes')     objectiveStates[objKey] = 'no';
+    else                            objectiveStates[objKey] = 'unknown';
+
+    updateObjectives();
+  }
+
+  function updateObjectives() {
+    // 1) Filter out layouts that contradict user overrides
+    const validLayouts = layouts.filter(layout => {
+      return Object.keys(objectiveStates).every(key => {
+        const userState = objectiveStates[key];
+        if (userState === 'yes' && layout[key] !== 1) return false;
+        if (userState === 'no'  && layout[key] !== 0) return false;
+        return true; // 'unknown' => no constraint
+      });
+    });
+
+    // If no layouts remain valid, show everything as unknown (contradiction scenario).
+    if (validLayouts.length === 0) {
+      Object.keys(objectiveStates).forEach(key => {
+        // We still keep the user override in objectiveStates,
+        // but for the display we mark them unknown. 
+        // Another approach: show an error or highlight the conflict.
+        setIcon(key, 'unknown');
+      });
+      return;
+    }
+
+    // 2) For each objective that is still 'unknown', see if it’s guaranteed (all 1 or all 0)
+    //    If user says 'yes' or 'no', we respect that override no matter what.
+    Object.keys(objectiveStates).forEach(key => {
+      const userState = objectiveStates[key];
+
+      if (userState === 'yes') {
+        // Forced present
+        setIcon(key, 'enabled');
+      } else if (userState === 'no') {
+        // Forced absent
+        setIcon(key, 'disabled');
+      } else {
+        // 'unknown' => check if guaranteed present or absent
+        const allAreOne = validLayouts.every(layout => layout[key] === 1);
+        const allAreZero = validLayouts.every(layout => layout[key] === 0);
+
+        if (allAreOne) {
+          // guaranteed present
+          setIcon(key, 'enabled');
+        } else if (allAreZero) {
+          // guaranteed absent
+          setIcon(key, 'disabled');
+        } else {
+          // otherwise truly unknown
+          setIcon(key, 'unknown');
+        }
+      }
+    });
+  }
+
+  // Helper: sets CSS classes and icon image
+  function setIcon(objKey, status) {
+    const iconEl = document.getElementById(`icon-${objKey}`);
+    if (!iconEl) return;
+
+    // Remove all possible classes
+    iconEl.classList.remove('unknown', 'enabled', 'disabled');
+
+    // Default to 'icon.png'
+    iconEl.src = 'icon.png';
+
+    if (status === 'enabled') {
+      iconEl.classList.add('enabled');
+      // Present => keep icon.png
+    } else if (status === 'disabled') {
+      iconEl.classList.add('disabled');
+      // Absent => change to icon_absent.png
+      iconEl.src = 'icon_absent.png';
+    } else {
+      // unknown
+      iconEl.classList.add('unknown');
+      // remains icon.png, but with lower opacity
+    }
+  }
+
+  // Assign click handlers
+  Object.keys(objectiveStates).forEach(key => {
+    const el = document.getElementById(`icon-${key}`);
+    if (el) el.addEventListener('click', () => toggleObjectiveState(key));
+  });
+
+  // Initialize on page load
+  updateObjectives();
+</script>
+
+</body>
+</html>
