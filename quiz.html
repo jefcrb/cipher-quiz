@@ -2,120 +2,94 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Single-Question Quiz (Score & Always Show Explanation)</title>
+  <title>Cipher Groups Quiz (Score & Mixed Questions)</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       width: 100%;
       font-family: sans-serif;
     }
-
     .quiz-container {
       max-width: 900px;
       margin: 20px auto;
       padding: 0 1rem;
-      text-align: center; /* ensures text (e.g. question) is centered */
+      text-align: center;
     }
-
     h1 {
       margin-bottom: 0.5rem;
     }
-
-    /* Score display at the top */
     .score-display {
       font-size: 1.2rem;
       font-weight: bold;
       margin: 0.5rem 0;
     }
-
-    /* Map container used both for main map and previews */
     .map-container {
       position: relative;
       margin: 0 auto 1rem;
-      width: 70%;          
+      width: 70%;
       max-width: 1000px;
     }
-
     .map-container img.map-image {
       width: 100%;
       height: auto;
       display: block;
     }
-
     @media (orientation: portrait) {
       .map-container {
         width: 90%;
       }
     }
-
     .objective-icon {
       position: absolute;
       width: 40px;
       height: 40px;
       transform: translate(-50%, -50%);
-    }
-    .full-opacity {
       opacity: 1.0;
     }
-
     .question-block {
       margin-bottom: 10px;
       font-size: 18px;
     }
-
     @media (orientation: portrait) {
-        .question-block {
+      .question-block {
         font-size: 32px;
       }
     }
-
-    .answers-row {
+    .answers-row, .answers-row-numeric {
       display: flex;
-      gap: 4rem;
+      gap: 1rem;
       margin-bottom: 1rem;
       justify-content: center;
+      flex-wrap: wrap;
     }
-    .answer-btn,#nextQuestionBtn {
+    .answer-btn, #nextQuestionBtn {
       padding: 0.3rem 1rem;
       color: #fff;
       font-size: 16px;
       cursor: pointer;
       transform: skewX(-10deg);
     }
-
     #nextQuestionBtn {
-        color: black;
+      color: black;
+      background-color: #ccc;
     }
-
     @media (orientation: portrait) {
-      .answer-btn,#nextQuestionBtn {
+      .answer-btn, #nextQuestionBtn {
         font-size: 32px;
       }
     }
-    .answer-btn.true {
-      background-color: #28a745; /* green */
+    .answer-btn.true { background-color: #28a745; }
+    .answer-btn.false { background-color: #dc3545; }
+    .answer-btn.not-sure { background-color: #fd7e14; }
+    .answer-num-btn {
+      background-color: #007bff; /* blue for numeric answers */
     }
-    .answer-btn.false {
-      background-color: #dc3545; /* red */
-    }
-    .answer-btn.not-sure {
-      background-color: #fd7e14; /* orange */
-    }
-
     .result {
       margin-top: 8px;
       font-weight: bold;
     }
-    .hidden {
-      display: none;
-    }
-
-    .buttons {
-      margin-top: 10px;
-    }
-
-    /* Matching layouts preview area */
+    .hidden { display: none; }
+    .buttons { margin-top: 10px; }
     .matching-layouts-container {
       margin-top: 1rem;
       display: flex;
@@ -134,15 +108,12 @@
     .layout-preview h4 {
       margin: 0.5rem 0;
     }
-
-    /* Smaller icons and narrower map for phones/tablets */
     @media (max-width: 768px) {
       .map-container {
         max-width: 100%;
       }
       .objective-icon {
-        width: 30px;
-        height: 30px;
+        width: 30px; height: 30px;
       }
       .answer-btn {
         font-size: 14px;
@@ -153,22 +124,28 @@
 <body>
 
 <div class="quiz-container">
-  <h1>Cipher Spawn Quiz</h1>
-  <p>Note: The question always displays a possible cipher layout</p>
-  <!-- Score out of 10 -->
+  <h1>Cipher Groups Quiz</h1>
   <div class="score-display" id="scoreDisplay">Score: 0 / 10</div>
 
   <!-- Main map -->
   <div class="map-container" id="mainMapContainer">
-    <img src="maps/armsfactory.png" alt="Arms Factory Map" class="map-image" id="mapImage">
+    <img src="maps/armsfactory.png" alt="Map" class="map-image" id="mapImage">
   </div>
 
   <div class="question-block" id="questionText"></div>
 
-  <div class="answers-row">
+  <!-- We maintain two different answer-rows:
+       1) T/F/Not known (for spawn-check questions)
+       2) Numeric + "Not known" (for group/subset count questions).
+       We show/hide them based on the question type. -->
+  <div class="answers-row" id="answersTFRow">
     <button class="answer-btn true" data-answer="True">True</button>
     <button class="answer-btn false" data-answer="False">False</button>
-    <button class="answer-btn not-sure" data-answer="NotSure">Not known</button>
+    <button class="answer-btn not-sure" data-answer="Not known">Not known</button>
+  </div>
+  <div class="answers-row-numeric hidden" id="answersNumRow">
+    <!-- We'll dynamically populate these numeric buttons:
+         for example 0..4 plus a "Not known" button -->
   </div>
 
   <div class="result hidden" id="resultDiv"></div>
@@ -182,23 +159,25 @@
 
 <script>
 // -------------------------
-// 1) Data
+// 1) Layout data
 // -------------------------
 const layouts = [
-  { A: 1, B: 1, C: 0, D: 0, E: 0, F: 0, G: 1, H: 1, I: 1, J: 1, K: 0, L: 1 },
-  { A: 1, B: 0, C: 0, D: 1, E: 0, F: 1, G: 1, H: 0, I: 1, J: 1, K: 0, L: 1 },
-  { A: 0, B: 1, C: 1, D: 1, E: 0, F: 0, G: 0, H: 1, I: 1, J: 1, K: 0, L: 1 },
-  { A: 1, B: 0, C: 1, D: 0, E: 1, F: 1, G: 0, H: 1, I: 0, J: 1, K: 1, L: 0 },
-  { A: 0, B: 1, C: 0, D: 0, E: 1, F: 0, G: 1, H: 1, I: 1, J: 1, K: 1, L: 0 }
+  { A:1, B:1, C:0, D:0, E:0, F:0, G:1, H:1, I:1, J:1, K:0, L:1 },
+  { A:1, B:0, C:0, D:1, E:0, F:1, G:1, H:0, I:1, J:1, K:0, L:1 },
+  { A:0, B:1, C:1, D:1, E:0, F:0, G:0, H:1, I:1, J:1, K:0, L:1 },
+  { A:1, B:0, C:1, D:0, E:1, F:1, G:0, H:1, I:0, J:1, K:1, L:0 },
+  { A:0, B:1, C:0, D:0, E:1, F:0, G:1, H:1, I:1, J:1, K:1, L:0 }
 ];
 
+// All objectives
 const objectiveKeys = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 
+// Aliases
 const objectiveAliases = {
   A: "deep shack",
   B: "no man's",
   C: "lockers",
-  D: "shack",
+  D: "next to shack",
   E: "shack ruins",
   F: "outside middle",
   G: "front gate",
@@ -209,147 +188,286 @@ const objectiveAliases = {
   L: "outside factory"
 };
 
+// Positions for the map
 const objectivePositions = {
-  A: { left: 315, top: 84 },
-  B: { left: 610, top: 120 },
-  C: { left: 810, top: 220 },
-  D: { left: 320, top: 240 },
-  E: { left: 220, top: 320 },
-  F: { left: 620, top: 410 },
-  G: { left: 850, top: 340 },
-  H: { left: 540, top: 510 },
-  I: { left: 120, top: 670 },
-  J: { left: 380, top: 730 },
-  K: { left: 750, top: 720 },
-  L: { left: 700, top: 790 }
+  A: { left:315, top:84 },   B: { left:610, top:120 },
+  C: { left:810, top:220 }, D: { left:320, top:240 },
+  E: { left:220, top:320 }, F: { left:620, top:410 },
+  G: { left:850, top:340 }, H: { left:540, top:510 },
+  I: { left:120, top:670 }, J: { left:380, top:730 },
+  K: { left:750, top:720 }, L: { left:700, top:790 }
 };
 
-// We'll do 10 questions
+// Groups:  e.g. "2 out of these 4 always spawn", "1 out of these 2 always spawns", etc.
+const groups = {
+  "Shack": {
+    label: "shack + no man's",
+    members: ["A","B","D","E"],
+    forcedCount: 2
+  },
+  "Deep-Middle": {
+    label: "deep sandbags - middle",
+    members: ["H","F","I"],
+    forcedCount: 2
+  },
+  "FrontLockers": {
+    label: "front gate",
+    members: ["G","C"],
+    forcedCount: 1
+  },
+  "Factory": {
+    label: "factory",
+    members: ["K","L"],
+    forcedCount: 1
+  },
+  "Sandbags": {
+    label: "sandbags",
+    members: ["J"],
+    forcedCount: 1
+  }
+};
+
+// We'll do 10 questions total
 const TOTAL_QUESTIONS = 10;
 let currentScore = 0;
 
 // -------------------------
-// 2) Generate random "spawn?" questions
+// 2) Generate mixed question types
 // -------------------------
-function generateQuizQuestions(numQuestions) {
-  const questions = [];
+function generateAllQuestions(numQuestions) {
+  let questions = [];
   let attempts = 0;
 
-  while (questions.length < numQuestions && attempts < 500) {
-    attempts++;
+  // We can interleave different question types for variety
+  // or we can randomly pick. For simplicity:
+  //  - half spawn-check (like your old T/F question)
+  //  - half group-count or subset-count
 
-    // random condition size
-    const conditionSize = getRandomInt(1, 3);
-    const shuffled = shuffleArray([...objectiveKeys]);
-    const conditionObjs = shuffled.slice(0, conditionSize);
+  const halfSpawnCheck = Math.ceil(numQuestions / 2);
+  const halfGroupCount = numQuestions - halfSpawnCheck;
 
-    const conditionStates = {};
-    conditionObjs.forEach(obj => {
-      conditionStates[obj] = getRandomInt(0, 1);
-    });
+  // 1) generate spawn-check questions
+  const spawnQs = generateSpawnCheckQuestions(halfSpawnCheck);
 
-    const matchingLayouts = layouts.filter(ly => {
-      return conditionObjs.every(obj => ly[obj] === conditionStates[obj]);
-    });
-    if (matchingLayouts.length === 0) continue;
+  // 2) generate group-count or subset-count questions
+  const groupQs = generateGroupSubsetQuestions(halfGroupCount);
 
-    const possibleResults = objectiveKeys.filter(k => !conditionObjs.includes(k));
-    if (possibleResults.length === 0) continue;
-    const resultObj = possibleResults[getRandomInt(0, possibleResults.length - 1)];
+  // combine & shuffle or just combine
+  questions = spawnQs.concat(groupQs);
+  // shuffle them so they're not all spawn-check first
+  shuffleArray(questions);
 
-    // resultState=1 => "does X spawn?"
-    const resultState = 1;
-    const totalMatches = matchingLayouts.length;
-    const matchesWithResult = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
-    let correctAnswer;
-    if (matchesWithResult === totalMatches) {
-      correctAnswer = 'True';
-    } else if (matchesWithResult === 0) {
-      correctAnswer = 'False';
-    } else {
-      correctAnswer = 'NotSure';
-    }
-
-    const text = buildQuestionText(conditionStates, resultObj);
-
-    questions.push({
-      text,
-      conditionStates,
-      resultObj,
-      resultState,
-      correctAnswer,
-      matchingLayouts
-    });
+  // If we have more than needed, slice
+  if (questions.length > numQuestions) {
+    questions = questions.slice(0, numQuestions);
   }
   return questions;
 }
 
-function buildQuestionText(conditionStates, resultObj) {
-  const condParts = Object.keys(conditionStates).map(key => {
-    const alias = `<strong>${objectiveAliases[key]}</strong>`;
-    return (conditionStates[key] === 1)
-      ? `${alias} spawns`
-      : `${alias} doesn't spawn`;
+// (A) Original "spawn check" question type
+function generateSpawnCheckQuestions(num) {
+  const result = [];
+  let tries = 0;
+
+  while (result.length < num && tries < 500) {
+    tries++;
+
+    // random condition size
+    const condSize = getRandomInt(1, 2);
+    const shuffled = shuffleArray([...objectiveKeys]);
+    const condObjs = shuffled.slice(0, condSize);
+
+    const condStates = {};
+    condObjs.forEach(obj => {
+      condStates[obj] = getRandomInt(0,1);
+    });
+
+    const matching = layouts.filter(ly =>
+      condObjs.every(obj => ly[obj] === condStates[obj])
+    );
+    if (matching.length === 0) continue;
+
+    // pick a result obj not in cond
+    const possibleResults = objectiveKeys.filter(k => !condObjs.includes(k));
+    if (possibleResults.length === 0) continue;
+    const rObj = possibleResults[getRandomInt(0, possibleResults.length-1)];
+
+    // we only ask "does rObj spawn?" => resultState=1
+    const totalMatches = matching.length;
+    const matchSpawn = matching.filter(ly => ly[rObj]===1).length;
+    let correct;
+    if (matchSpawn === totalMatches) correct = "True";
+    else if (matchSpawn === 0) correct = "False";
+    else correct = "Not known";
+
+    const qText = buildSpawnCheckText(condStates, rObj);
+    result.push({
+      questionType: "spawnCheck",
+      text: qText,
+      conditionStates: condStates,
+      resultObj: rObj,
+      correctAnswer: correct,
+      matchingLayouts: matching
+    });
+  }
+  return result;
+}
+
+// Build text "If A spawns and B doesn't spawn, does C spawn?"
+function buildSpawnCheckText(condStates, rObj) {
+  const condList = Object.keys(condStates).map(k => {
+    const alias = `<strong>${objectiveAliases[k]}</strong>`;
+    return (condStates[k]===1) ? `${alias} spawns` : `${alias} doesn't spawn`;
   });
-  const condString = condParts.join(' and ');
-  const resultAlias = `<strong>${objectiveAliases[resultObj]}</strong>`;
-  return `If ${condString}, does ${resultAlias} spawn?`;
+  const condString = condList.join(" and ");
+  const rAlias = `<strong>${objectiveAliases[rObj]}</strong>`;
+  return `If ${condString}, does ${rAlias} spawn?`;
 }
 
-// For the explanation
-function capitalizeFirst(str) {
-  if (!str) return str;
-  return str.charAt(0).toUpperCase() + str.slice(1);
+// (B) Group-count or subset-count question
+function generateGroupSubsetQuestions(num) {
+  const result = [];
+  let tries = 0;
+  const groupKeys = Object.keys(groups);
+
+  while (result.length < num && tries < 300) {
+    tries++;
+
+    // We'll 50/50 pick: "groupCount" or "subsetCount"
+    const pick = Math.random() < 0.5 ? "groupCount" : "subsetCount";
+
+    if (pick==="groupCount") {
+      // pick a random group
+      const gKey = groupKeys[getRandomInt(0, groupKeys.length-1)];
+      const gInfo = groups[gKey];
+
+      // "How many objectives always spawn in the <Group> group?"
+      // We know from your data that the correct number is gInfo.forcedCount
+      // This question never has "Not known" as correct (based on your example).
+      // The user can pick 0..(the group size) or "Not known."
+      // We'll produce an array of possible answers, e.g. 0..4 plus "Not known."
+      const qText = `How many of these ciphers will spawn?`;
+
+      result.push({
+        questionType: "groupCount",
+        groupKey: gKey,
+        text: qText,
+        correctAnswer: gInfo.forcedCount, // an integer
+        groupSize: gInfo.members.length
+      });
+
+    } else {
+      // "subsetCount": pick a random subset of objectives (maybe 2-4 in size).
+      // Ask "How many of these shown objectives can spawn?"
+      // We have to see if there's a single known count or if it can vary => correct could be "Not known."
+      const subSize = getRandomInt(2,4);
+      const shuffledAll = shuffleArray([...objectiveKeys]);
+      const chosen = shuffledAll.slice(0, subSize);
+
+      // Evaluate how many spawn across all 5 layouts. Possibly it differs.
+      // If *every* layout that could match has the same # of spawn from that subset => that's correct
+      // else => "Not known."
+      // But your 5 example layouts might not match any condition? We'll assume no condition filtering for now.
+
+      // For each layout, count how many from 'chosen' are 1
+      let minCount = 99, maxCount = -1;
+      layouts.forEach(ly => {
+        const c = chosen.reduce((acc, k) => acc + ly[k], 0);
+        minCount = Math.min(minCount, c);
+        maxCount = Math.max(maxCount, c);
+      });
+      let correct;
+      if (minCount===maxCount) correct = minCount; 
+      else correct = "NotKnown"; // if it varies
+
+      // question text
+      const names = chosen.map(k => `<strong>${objectiveAliases[k]}</strong>`).join(", ");
+      const qText = `How many of these ciphers will spawn?`;
+      
+      result.push({
+        questionType: "subsetCount",
+        subset: chosen,
+        text: qText,
+        correctAnswer: correct,
+        subsetSize: subSize
+      });
+    }
+  }
+  return result;
 }
 
-function buildElaborateExplanation(question) {
+// For elaboration on group/subset questions, we might do simpler explanations
+function buildElaborateExplanation(q) {
+  if (q.questionType==="spawnCheck") {
+    // do your old spawn-check logic
+    return buildSpawnCheckElaboration(q);
+  } else if (q.questionType==="groupCount") {
+    // e.g. "2 out of 4 from Shack always spawn" 
+    const g = groups[q.groupKey];
+    return `${g.forcedCount} out of ${g.members.length} ciphers always spawn in ${g.label}`;
+  } else {
+    // subsetCount
+    if (typeof q.correctAnswer==="number") {
+      return `Out of the shown ciphers, ${q.correctAnswer} will always spawn`;
+    } else {
+      return `The number changes for each layout`;
+    }
+  }
+}
+
+// The old “spawn-check” explanation
+function buildSpawnCheckElaboration(question) {
   const { conditionStates, resultObj, matchingLayouts } = question;
   const totalMatches = matchingLayouts.length;
+  // how many also have the result objective=1
   const matchCount = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
 
+  // condition phrase
   const condParts = Object.keys(conditionStates).map(key => {
     const alias = `<strong>${objectiveAliases[key]}</strong>`;
     return conditionStates[key] === 1
       ? `${alias} spawns`
       : `${alias} doesn't spawn`;
   });
-  const whenPhrase = (condParts.length > 0)
+  const whenPhrase = (condParts.length>0)
     ? ' when ' + condParts.join(' and ')
     : '';
-
+  
+  // capitalized result alias
   const rawAlias = objectiveAliases[resultObj];
-  const capAlias = capitalizeFirst(rawAlias);
+  const capAlias = rawAlias.charAt(0).toUpperCase() + rawAlias.slice(1);
   const resultAlias = `<strong>${capAlias}</strong>`;
 
   const ratio = matchCount / totalMatches;
-  if (ratio === 1) {
+  if (ratio===1) {
     return `${resultAlias} always spawns${whenPhrase}`;
-  } else if (ratio === 0) {
+  } else if (ratio===0) {
     return `${resultAlias} never spawns${whenPhrase}`;
   } else {
-    const pct = Math.round(ratio * 100);
+    const pct = Math.round(ratio*100);
     return `${resultAlias} has a ${pct}% chance to spawn${whenPhrase}`;
   }
 }
 
-// Utility
-function getRandomInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+
+// Utility functions
+function getRandomInt(min,max){
+  return Math.floor(Math.random()*(max-min+1))+min;
 }
-function shuffleArray(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+function shuffleArray(arr) {
+  for (let i=arr.length-1; i>0; i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  return array;
+  return arr;
 }
 
 // -------------------------
 // 3) Main quiz logic
 // -------------------------
-let questions = generateQuizQuestions(TOTAL_QUESTIONS);
-let currentQuestionIndex = 0;
-let questionAnswered = false; // track if first attempt was correct for this question
+let questions = generateAllQuestions(TOTAL_QUESTIONS);
+let currentQuestionIndex=0;
+let questionAnswered=false;
 
 const scoreDisplay = document.getElementById('scoreDisplay');
 const mainMapContainer = document.getElementById('mainMapContainer');
@@ -358,7 +476,49 @@ const resultDiv = document.getElementById('resultDiv');
 const nextQuestionBtn = document.getElementById('nextQuestionBtn');
 const matchingLayoutsContainer = document.getElementById('matchingLayoutsContainer');
 
-// Show first question
+// We have 2 answer rows: T/F/Not known => #answersTFRow
+//                        numeric => #answersNumRow
+const answersTFRow = document.getElementById('answersTFRow');
+const answersNumRow = document.getElementById('answersNumRow');
+
+// Pre-populate numeric row with 0..4 plus "Not known"
+// or you can do 0..6 etc. depending on how large subsets can get
+// We'll do up to 4 plus a "Not known"
+function setupNumericRow() {
+  answersNumRow.innerHTML = '';
+  for (let i=0; i<=4; i++) {
+    const btn = document.createElement('button');
+    btn.classList.add('answer-btn','answer-num-btn');
+    btn.textContent = i;
+    btn.dataset.answer = ""+i; 
+    answersNumRow.appendChild(btn);
+  }
+  // plus Not known
+  const notKnownBtn = document.createElement('button');
+  notKnownBtn.classList.add('answer-btn','answer-num-btn');
+  notKnownBtn.textContent = "Not known";
+  notKnownBtn.dataset.answer = "NotKnown";
+  answersNumRow.appendChild(notKnownBtn);
+}
+setupNumericRow(); // do once at start
+
+// Add event listeners to numeric row
+answersNumRow.querySelectorAll('.answer-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    if (questionAnswered) return;
+    checkAnswer(e.currentTarget.dataset.answer);
+  });
+});
+
+// Add event listeners to T/F/Not known row
+answersTFRow.querySelectorAll('.answer-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    if (questionAnswered) return;
+    checkAnswer(e.currentTarget.dataset.answer);
+  });
+});
+
+// show first question
 showQuestion(0);
 
 nextQuestionBtn.addEventListener('click', () => {
@@ -366,27 +526,18 @@ nextQuestionBtn.addEventListener('click', () => {
   if (currentQuestionIndex < questions.length) {
     showQuestion(currentQuestionIndex);
   } else {
-    // End of quiz
-    questionTextEl.innerHTML = `Quiz complete! You scored ${currentScore} out of ${TOTAL_QUESTIONS}.`;
+    // end quiz
+    questionTextEl.innerHTML = `Quiz complete! You scored ${currentScore} / ${TOTAL_QUESTIONS}`;
     mainMapContainer.classList.add('hidden');
-    document.querySelector('.answers-row').classList.add('hidden');
+    answersTFRow.classList.add('hidden');
+    answersNumRow.classList.add('hidden');
     nextQuestionBtn.classList.add('hidden');
     matchingLayoutsContainer.classList.add('hidden');
   }
 });
 
-document.querySelectorAll('.answer-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    if (questionAnswered) {
-      return; // ignore subsequent attempts
-    }
-    const userChoice = e.currentTarget.dataset.answer;
-    checkAnswer(userChoice);
-  });
-});
-
 function showQuestion(qIndex) {
-  questionAnswered = false;
+  questionAnswered=false;
   resultDiv.textContent = '';
   resultDiv.classList.add('hidden');
   nextQuestionBtn.classList.add('hidden');
@@ -394,115 +545,159 @@ function showQuestion(qIndex) {
   matchingLayoutsContainer.classList.add('hidden');
 
   const q = questions[qIndex];
-  questionTextEl.innerHTML = `Question ${qIndex + 1}: ${q.text}`;
+  questionTextEl.innerHTML = `Question ${qIndex+1}: ${q.text}`;
 
-  clearIcons(mainMapContainer);
-  renderQuestionIcons(q);
-}
-
-function renderQuestionIcons(question) {
-  const { conditionStates, resultObj } = question;
-  const mainMapImg = document.getElementById('mapImage');
-
-  if (mainMapImg.complete) {
-    placeIconsNow();
+  // Depending on questionType, show T/F or numeric row
+  if (q.questionType==="spawnCheck") {
+    answersTFRow.classList.remove('hidden');
+    answersNumRow.classList.add('hidden');
   } else {
-    mainMapImg.addEventListener('load', placeIconsNow, { once: true });
+    // groupCount or subsetCount => we expect numeric answers
+    answersTFRow.classList.add('hidden');
+    answersNumRow.classList.remove('hidden');
   }
 
-  function placeIconsNow() {
-    const scale = mainMapImg.clientWidth / 1012;
-    // condition icons
-    for (const [objKey, spawnState] of Object.entries(conditionStates)) {
-      const iconName = spawnState === 1 ? 'icon.png' : 'icon_absent.png';
-      addIcon(mainMapContainer, objKey, iconName, scale);
-    }
-    // question icon
-    addIcon(mainMapContainer, resultObj, 'icon_question.png', scale);
+  // If it's spawnCheck, we can show a map with condition icons + question icon
+  // If it's groupCount or subsetCount, we can show question icons for the relevant group or subset
+  clearIcons(mainMapContainer);
+  renderMapIcons(q);
+}
+
+// Different ways to show icons
+function renderMapIcons(question) {
+  const mainMapImg = document.getElementById('mapImage');
+  if (!mainMapImg.complete) {
+    mainMapImg.addEventListener('load', () => doRenderIcons(question), {once:true});
+  } else {
+    doRenderIcons(question);
   }
 }
 
-function addIcon(container, objKey, imageFile, scale) {
+function doRenderIcons(q) {
+  const scale = document.getElementById('mapImage').clientWidth / 1012;
+  // for spawnCheck => condition + result
+  if (q.questionType==="spawnCheck") {
+    // condition
+    for (const [objKey,spawnState] of Object.entries(q.conditionStates)) {
+      const iconName = (spawnState===1)? 'icon.png':'icon_absent.png';
+      addIcon(mainMapContainer,objKey,iconName,scale);
+    }
+    // questioned
+    addIcon(mainMapContainer,q.resultObj,'icon_question.png',scale);
+  }
+  else if (q.questionType==="groupCount") {
+    // show group members with question icons
+    // plus you can show other objectives as absent or hidden if you want, or just omit them
+    const { groupKey } = q;
+    const gInfo = groups[groupKey];
+    gInfo.members.forEach(m => {
+      addIcon(mainMapContainer, m, 'icon_question.png', scale);
+    });
+  }
+  else {
+    // subsetCount => place question icons for that subset
+    q.subset.forEach(m => {
+      addIcon(mainMapContainer, m, 'icon_question.png', scale);
+    });
+  }
+}
+
+function addIcon(container,objKey,imageFile,scale) {
   const pos = objectivePositions[objKey];
   if (!pos) return;
   const icon = document.createElement('img');
-  icon.classList.add('objective-icon', 'full-opacity');
+  icon.classList.add('objective-icon');
   icon.src = imageFile;
-  icon.style.left = (pos.left * scale) + 'px';
-  icon.style.top  = (pos.top * scale) + 'px';
+  icon.style.left = (pos.left*scale)+'px';
+  icon.style.top = (pos.top*scale)+'px';
   container.appendChild(icon);
 }
 
-function clearIcons(container) {
-  container.querySelectorAll('.objective-icon').forEach(icon => icon.remove());
+function clearIcons(container){
+  container.querySelectorAll('.objective-icon').forEach(el => el.remove());
 }
 
-function checkAnswer(userChoice) {
-  const q = questions[currentQuestionIndex];
-  const correct = q.correctAnswer;
-  questionAnswered = true; // user is making the first attempt
+// Evaluate answer
+function checkAnswer(userAnswer) {
+  questionAnswered=true;
 
-  // If correct => +1
-  let correctStr = correct;
-  if (correct === 'NotSure') {
-    correctStr = 'Not known';
+  const q = questions[currentQuestionIndex];
+  let correctAnswer = q.correctAnswer; // can be 'True','False','NotSure' or integer or 'NotKnown'
+
+  // Convert our special 'NotKnown' => 'Not known' for display
+  if (correctAnswer==='NotKnown') correctAnswer='Not known';
+
+  // For spawnCheck => userAnswer is 'True','False','NotSure'
+  // For groupCount/subsetCount => userAnswer might be '0','1','2','3','4','NotKnown'
+
+  // If correct => +1 to score
+  let isCorrect = false;
+  if (q.questionType==="spawnCheck") {
+    // correctAnswer is T/F/NotSure
+    isCorrect = (userAnswer===q.correctAnswer);
+  } else {
+    // groupCount or subsetCount => correctAnswer is number or "NotKnown"
+    if (typeof q.correctAnswer==="number") {
+      // user must pick that number as a string
+      isCorrect = (userAnswer===String(q.correctAnswer));
+    } else {
+      // if correct answer is "Not known" or "NotKnown"
+      isCorrect = (userAnswer==="NotKnown" || userAnswer==="Not known");
+    }
   }
 
-  // Build the elaborate explanation in black
+  // build explanation
   const explanation = buildElaborateExplanation(q);
-  const explanationHtml = `<div style="color: black; margin-top: 0.5rem;">${explanation}</div>`;
+  const explanationHtml = `<div style="color: black; margin-top:0.5rem;">${explanation}</div>`;
 
-  if (userChoice === correct) {
+  if (isCorrect) {
     currentScore++;
-    updateScoreDisplay();
-
-    // "Correct!" in green, plus explanation in black
+    scoreDisplay.textContent = `Score: ${currentScore} / ${TOTAL_QUESTIONS}`;
     resultDiv.innerHTML = `<span style="color: green;">Correct!</span>${explanationHtml}`;
   } else {
-    // "Incorrect..." in red, plus the same explanation in black
-    resultDiv.innerHTML = `<span style="color: red;">Incorrect. Correct answer: ${correctStr}.</span>${explanationHtml}`;
+    resultDiv.innerHTML = `<span style="color: red;">Incorrect. Correct answer: ${correctAnswer}.</span>${explanationHtml}`;
   }
-
   resultDiv.classList.remove('hidden');
 
-  // Show matching layouts
-  renderMatchingLayouts(q);
+  // show matching layouts if spawnCheck, or do nothing if group?
+  // For simplicity, let's always show "matching" for spawnCheck
+  if (q.questionType==="spawnCheck") {
+    renderMatchingLayouts(q);
+  } else {
+    // optionally do no matching layouts for group/subset question
+    matchingLayoutsContainer.classList.add('hidden');
+  }
+
   nextQuestionBtn.classList.remove('hidden');
 }
 
-function updateScoreDisplay() {
-  scoreDisplay.textContent = `Score: ${currentScore} / ${TOTAL_QUESTIONS}`;
-}
-
-// Show each layout that matches
+// Show layouts for spawn-check
 function renderMatchingLayouts(question) {
   matchingLayoutsContainer.innerHTML = '';
   matchingLayoutsContainer.classList.remove('hidden');
-
   const { matchingLayouts } = question;
-  matchingLayouts.forEach((ly, idx) => {
-    const previewDiv = document.createElement('div');
-    previewDiv.classList.add('layout-preview');
 
-    const label = document.createElement('h4');
-    label.textContent = `Possible layout ${idx + 1}`;
+  matchingLayouts.forEach((ly,idx)=>{
+    const previewDiv=document.createElement('div');
+    previewDiv.classList.add('layout-preview');
+    const label=document.createElement('h4');
+    label.textContent=`Possible layout ${idx+1}`;
     previewDiv.appendChild(label);
 
-    const mapContainer = document.createElement('div');
+    const mapContainer=document.createElement('div');
     mapContainer.classList.add('map-container');
-
-    const mapImg = document.createElement('img');
-    mapImg.classList.add('map-image');
-    mapImg.src = 'maps/armsfactory.png';
-
-    mapContainer.appendChild(mapImg);
     previewDiv.appendChild(mapContainer);
 
-    mapImg.addEventListener('load', () => {
-      const scale = mapImg.clientWidth / 1012;
-      objectiveKeys.forEach(objKey => {
-        if (ly[objKey] === 1) {
-          addIcon(mapContainer, objKey, 'icon.png', scale);
+    const mapImg=document.createElement('img');
+    mapImg.classList.add('map-image');
+    mapImg.src='maps/armsfactory.png';
+    mapContainer.appendChild(mapImg);
+
+    mapImg.addEventListener('load',()=>{
+      const sc = mapImg.clientWidth / 1012;
+      objectiveKeys.forEach(obj=>{
+        if (ly[obj]===1) {
+          addIcon(mapContainer,obj,'icon.png',sc);
         }
       });
     });
