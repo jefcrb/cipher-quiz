@@ -2,10 +2,11 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Cipher Groups Quiz (Score & Mixed Questions)</title>
+  <title>Cipher Groups Quiz (Condition Simplification)</title>
   <style>
     html, body {
-      margin: 0; padding: 0;
+      margin: 0; 
+      padding: 0;
       width: 100%;
       font-family: sans-serif;
     }
@@ -26,7 +27,7 @@
     .map-container {
       position: relative;
       margin: 0 auto 1rem;
-      width: 70%;
+      width: 60%;
       max-width: 1000px;
     }
     .map-container img.map-image {
@@ -82,7 +83,7 @@
     .answer-btn.false { background-color: #dc3545; }
     .answer-btn.not-sure { background-color: #fd7e14; }
     .answer-num-btn {
-      background-color: #007bff; /* blue for numeric answers */
+      background-color: #007bff; /* numeric answers => blue */
     }
     .result {
       margin-top: 8px;
@@ -113,7 +114,8 @@
         max-width: 100%;
       }
       .objective-icon {
-        width: 30px; height: 30px;
+        width: 30px; 
+        height: 30px;
       }
       .answer-btn {
         font-size: 14px;
@@ -124,43 +126,34 @@
 <body>
 
 <div class="quiz-container">
-  <h1>Cipher Groups Quiz</h1>
+  <h1>Cipher Groups Quiz (Condition Simplification)</h1>
   <div class="score-display" id="scoreDisplay">Score: 0 / 10</div>
 
-  <!-- Main map -->
   <div class="map-container" id="mainMapContainer">
     <img src="maps/armsfactory.png" alt="Map" class="map-image" id="mapImage">
   </div>
 
   <div class="question-block" id="questionText"></div>
 
-  <!-- We maintain two different answer-rows:
-       1) T/F/Not known (for spawn-check questions)
-       2) Numeric + "Not known" (for group/subset count questions).
-       We show/hide them based on the question type. -->
+  <!-- T/F/Not known row -->
   <div class="answers-row" id="answersTFRow">
     <button class="answer-btn true" data-answer="True">True</button>
     <button class="answer-btn false" data-answer="False">False</button>
-    <button class="answer-btn not-sure" data-answer="Not known">Not known</button>
+    <button class="answer-btn not-sure" data-answer="NotSure">Not known</button>
   </div>
-  <div class="answers-row-numeric hidden" id="answersNumRow">
-    <!-- We'll dynamically populate these numeric buttons:
-         for example 0..4 plus a "Not known" button -->
-  </div>
+
+  <!-- Numeric row: 0..4 + "Not known" -->
+  <div class="answers-row-numeric hidden" id="answersNumRow"></div>
 
   <div class="result hidden" id="resultDiv"></div>
-
   <div class="buttons">
     <button id="nextQuestionBtn" class="hidden">Next</button>
   </div>
-
   <div id="matchingLayoutsContainer" class="matching-layouts-container hidden"></div>
 </div>
 
 <script>
-// -------------------------
-// 1) Layout data
-// -------------------------
+// Layout data
 const layouts = [
   { A:1, B:1, C:0, D:0, E:0, F:0, G:1, H:1, I:1, J:1, K:0, L:1 },
   { A:1, B:0, C:0, D:1, E:0, F:1, G:1, H:0, I:1, J:1, K:0, L:1 },
@@ -168,366 +161,653 @@ const layouts = [
   { A:1, B:0, C:1, D:0, E:1, F:1, G:0, H:1, I:0, J:1, K:1, L:0 },
   { A:0, B:1, C:0, D:0, E:1, F:0, G:1, H:1, I:1, J:1, K:1, L:0 }
 ];
-
-// All objectives
-const objectiveKeys = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-
-// Aliases
+const objectiveKeys = ["A","B","C","D","E","F","G","H","I","J","K","L"];
 const objectiveAliases = {
-  A: "deep shack",
-  B: "no man's",
-  C: "lockers",
-  D: "next to shack",
-  E: "shack ruins",
-  F: "outside middle",
-  G: "front gate",
-  H: "middle",
-  I: "deep sandbags",
-  J: "sandbags",
-  K: "inside factory",
-  L: "outside factory"
+  A:"deep shack", B:"no man's", C:"lockers", D:"next to shack", 
+  E:"shack ruins", F:"outside middle", G:"front gate",
+  H:"inside middle", I:"deep sandbags", J:"sandbags",
+  K:"inside factory", L:"outside factory"
+};
+const objectivePositions={
+  A:{left:315,top:84}, B:{left:610,top:120}, C:{left:810,top:220}, D:{left:320,top:240},
+  E:{left:220,top:320}, F:{left:620,top:410}, G:{left:850,top:340}, H:{left:540,top:510},
+  I:{left:120,top:670}, J:{left:380,top:730}, K:{left:750,top:720}, L:{left:700,top:790}
+};
+// Groups
+const groups={
+  Shack:{label:"shack and no-man's",members:["A","B","D","E"],forcedCount:2},
+  DeepMiddle:{label:"deep sandbags and middle",members:["H","F","I"],forcedCount:2},
+  FrontLockers:{label:"front gate and lockers",members:["G","C"],forcedCount:1},
+  Factory:{label:"factory",members:["K","L"],forcedCount:1},
+  Sandbags:{label:"sandbags",members:["J"],forcedCount:1},
+  MiddleTopRight:{label:"outside middle, no-man's and front gate",members:["B","C","F","G"],forcedCount:2},
+  MiddleNomans:{label:"outside middle and no-man's",members:["B","F"],forcedCount:1}
 };
 
-// Positions for the map
-const objectivePositions = {
-  A: { left:315, top:84 },   B: { left:610, top:120 },
-  C: { left:810, top:220 }, D: { left:320, top:240 },
-  E: { left:220, top:320 }, F: { left:620, top:410 },
-  G: { left:850, top:340 }, H: { left:540, top:510 },
-  I: { left:120, top:670 }, J: { left:380, top:730 },
-  K: { left:750, top:720 }, L: { left:700, top:790 }
-};
+// Score
+let currentScore=0;
+const TOTAL_QUESTIONS=10;
 
-// Groups:  e.g. "2 out of these 4 always spawn", "1 out of these 2 always spawns", etc.
-const groups = {
-  "Shack": {
-    label: "shack + no man's",
-    members: ["A","B","D","E"],
-    forcedCount: 2
-  },
-  "Deep-Middle": {
-    label: "deep sandbags - middle",
-    members: ["H","F","I"],
-    forcedCount: 2
-  },
-  "FrontLockers": {
-    label: "front gate",
-    members: ["G","C"],
-    forcedCount: 1
-  },
-  "Factory": {
-    label: "factory",
-    members: ["K","L"],
-    forcedCount: 1
-  },
-  "Sandbags": {
-    label: "sandbags",
-    members: ["J"],
-    forcedCount: 1
-  }
-};
+// 1) Generate random question set
+function generateAllQuestions(numQ){
+  const halfSpawnCheck=Math.ceil(numQ/2);
+  const halfGroupCount=numQ-halfSpawnCheck;
 
-// We'll do 10 questions total
-const TOTAL_QUESTIONS = 10;
-let currentScore = 0;
-
-// -------------------------
-// 2) Generate mixed question types
-// -------------------------
-function generateAllQuestions(numQuestions) {
-  let questions = [];
-  let attempts = 0;
-
-  // We can interleave different question types for variety
-  // or we can randomly pick. For simplicity:
-  //  - half spawn-check (like your old T/F question)
-  //  - half group-count or subset-count
-
-  const halfSpawnCheck = Math.ceil(numQuestions / 2);
-  const halfGroupCount = numQuestions - halfSpawnCheck;
-
-  // 1) generate spawn-check questions
   const spawnQs = generateSpawnCheckQuestions(halfSpawnCheck);
-
-  // 2) generate group-count or subset-count questions
   const groupQs = generateGroupSubsetQuestions(halfGroupCount);
 
-  // combine & shuffle or just combine
-  questions = spawnQs.concat(groupQs);
-  // shuffle them so they're not all spawn-check first
-  shuffleArray(questions);
-
-  // If we have more than needed, slice
-  if (questions.length > numQuestions) {
-    questions = questions.slice(0, numQuestions);
-  }
-  return questions;
+  let allQs = spawnQs.concat(groupQs);
+  shuffleArray(allQs);
+  if(allQs.length>numQ) allQs=allQs.slice(0,numQ);
+  return allQs;
 }
 
-// (A) Original "spawn check" question type
-function generateSpawnCheckQuestions(num) {
-  const result = [];
-  let tries = 0;
-
-  while (result.length < num && tries < 500) {
+// Weighted condition states: 80% spawn, 20% doesn't
+// ~10% "NotSure" or "NotKnown" questions remain
+function generateSpawnCheckQuestions(num){
+  const results=[];
+  let tries=0;
+  while(results.length<num && tries<500){
     tries++;
+    const condSize=getRandomInt(3,5);
+    const shuf=[...objectiveKeys];
+    shuffleArray(shuf);
+    const condObjs=shuf.slice(0,condSize);
 
-    // random condition size
-    const condSize = getRandomInt(1, 2);
-    const shuffled = shuffleArray([...objectiveKeys]);
-    const condObjs = shuffled.slice(0, condSize);
-
-    const condStates = {};
-    condObjs.forEach(obj => {
-      condStates[obj] = getRandomInt(0,1);
+    const condStates={};
+    condObjs.forEach(o=>{
+      condStates[o] = (Math.random()<0.2)?0:1;
     });
-
-    const matching = layouts.filter(ly =>
-      condObjs.every(obj => ly[obj] === condStates[obj])
+    const matching=layouts.filter(ly=>
+      condObjs.every(c=>ly[c]===condStates[c])
     );
-    if (matching.length === 0) continue;
+    if(matching.length===0) continue;
 
     // pick a result obj not in cond
-    const possibleResults = objectiveKeys.filter(k => !condObjs.includes(k));
-    if (possibleResults.length === 0) continue;
-    const rObj = possibleResults[getRandomInt(0, possibleResults.length-1)];
+    const possible=objectiveKeys.filter(k=>!condObjs.includes(k));
+    if(!possible.length) continue;
+    const rObj=possible[getRandomInt(0, possible.length-1)];
 
-    // we only ask "does rObj spawn?" => resultState=1
-    const totalMatches = matching.length;
-    const matchSpawn = matching.filter(ly => ly[rObj]===1).length;
+    const totalM=matching.length;
+    const spawnCount=matching.filter(ly=>ly[rObj]===1).length;
     let correct;
-    if (matchSpawn === totalMatches) correct = "True";
-    else if (matchSpawn === 0) correct = "False";
-    else correct = "Not known";
-
-    const qText = buildSpawnCheckText(condStates, rObj);
-    result.push({
-      questionType: "spawnCheck",
-      text: qText,
-      conditionStates: condStates,
-      resultObj: rObj,
-      correctAnswer: correct,
-      matchingLayouts: matching
+    if(spawnCount===totalM) correct="True";
+    else if(spawnCount===0) correct="False";
+    else {
+      if(Math.random()<0.9) continue; // skip 90% "NotSure"
+      correct="NotSure";
+    }
+    const qText=buildSpawnCheckText(condStates,rObj);
+    results.push({
+      questionType:"spawnCheck",
+      text:qText,
+      conditionStates:condStates,
+      resultObj:rObj,
+      correctAnswer:correct,
+      matchingLayouts:matching
     });
   }
-  return result;
+  return results;
 }
 
-// Build text "If A spawns and B doesn't spawn, does C spawn?"
-function buildSpawnCheckText(condStates, rObj) {
-  const condList = Object.keys(condStates).map(k => {
-    const alias = `<strong>${objectiveAliases[k]}</strong>`;
-    return (condStates[k]===1) ? `${alias} spawns` : `${alias} doesn't spawn`;
+function buildSpawnCheckText(condStates,resultObj){
+  const condKeys=Object.keys(condStates);
+  const condArr=condKeys.map(k=>{
+    const alias=`<strong>${objectiveAliases[k]}</strong>`;
+    return condStates[k]===1?`${alias} spawns`:`${alias} doesn't spawn`;
   });
-  const condString = condList.join(" and ");
-  const rAlias = `<strong>${objectiveAliases[rObj]}</strong>`;
+  // grammar: "If X spawns, Y spawns and Z spawns, does A spawn?"
+  let condString='';
+  if(condArr.length===1){
+    condString=condArr[0];
+  } else if(condArr.length>1){
+    const last=condArr.pop();
+    condString=condArr.join(', ')+' and '+last;
+  }
+  const rAlias=`<strong>${objectiveAliases[resultObj]}</strong>`;
   return `If ${condString}, does ${rAlias} spawn?`;
 }
 
-// (B) Group-count or subset-count question
-function generateGroupSubsetQuestions(num) {
-  const result = [];
-  let tries = 0;
-  const groupKeys = Object.keys(groups);
-
-  while (result.length < num && tries < 300) {
+// group/subset questions
+function generateGroupSubsetQuestions(num){
+  let out=[];
+  let tries=0;
+  const gKeys=Object.keys(groups);
+  while(out.length<num && tries<300){
     tries++;
-
-    // We'll 50/50 pick: "groupCount" or "subsetCount"
-    const pick = Math.random() < 0.5 ? "groupCount" : "subsetCount";
-
-    if (pick==="groupCount") {
-      // pick a random group
-      const gKey = groupKeys[getRandomInt(0, groupKeys.length-1)];
-      const gInfo = groups[gKey];
-
-      // "How many objectives always spawn in the <Group> group?"
-      // We know from your data that the correct number is gInfo.forcedCount
-      // This question never has "Not known" as correct (based on your example).
-      // The user can pick 0..(the group size) or "Not known."
-      // We'll produce an array of possible answers, e.g. 0..4 plus "Not known."
-      const qText = `How many of these ciphers will spawn?`;
-
-      result.push({
-        questionType: "groupCount",
-        groupKey: gKey,
-        text: qText,
-        correctAnswer: gInfo.forcedCount, // an integer
-        groupSize: gInfo.members.length
+    const pick=(Math.random()<0.5)?"groupCount":"subsetCount";
+    if(pick==="groupCount"){
+      const gKey=gKeys[getRandomInt(0,gKeys.length-1)];
+      const gInfo=groups[gKey];
+      const qText=`How many of the shown ciphers will always spawn?`;
+      out.push({
+        questionType:"groupCount",
+        groupKey:gKey,
+        text:qText,
+        correctAnswer:gInfo.forcedCount,
+        groupSize:gInfo.members.length
       });
-
     } else {
-      // "subsetCount": pick a random subset of objectives (maybe 2-4 in size).
-      // Ask "How many of these shown objectives can spawn?"
-      // We have to see if there's a single known count or if it can vary => correct could be "Not known."
-      const subSize = getRandomInt(2,4);
-      const shuffledAll = shuffleArray([...objectiveKeys]);
-      const chosen = shuffledAll.slice(0, subSize);
+      // subsetCount
+      const subSize=getRandomInt(2,4);
+      const sh=[...objectiveKeys];
+      shuffleArray(sh);
+      const chosen=sh.slice(0,subSize);
 
-      // Evaluate how many spawn across all 5 layouts. Possibly it differs.
-      // If *every* layout that could match has the same # of spawn from that subset => that's correct
-      // else => "Not known."
-      // But your 5 example layouts might not match any condition? We'll assume no condition filtering for now.
-
-      // For each layout, count how many from 'chosen' are 1
-      let minCount = 99, maxCount = -1;
-      layouts.forEach(ly => {
-        const c = chosen.reduce((acc, k) => acc + ly[k], 0);
-        minCount = Math.min(minCount, c);
-        maxCount = Math.max(maxCount, c);
+      let minC=99,maxC=-1;
+      layouts.forEach(ly=>{
+        const c=chosen.reduce((acc,k)=>acc+ly[k],0);
+        minC=Math.min(minC,c);
+        maxC=Math.max(maxC,c);
       });
       let correct;
-      if (minCount===maxCount) correct = minCount; 
-      else correct = "NotKnown"; // if it varies
-
-      // question text
-      const names = chosen.map(k => `<strong>${objectiveAliases[k]}</strong>`).join(", ");
-      const qText = `How many of these ciphers will spawn?`;
-      
-      result.push({
-        questionType: "subsetCount",
-        subset: chosen,
-        text: qText,
-        correctAnswer: correct,
-        subsetSize: subSize
+      if(minC===maxC) correct=minC;
+      else {
+        if(Math.random()<0.9) continue; // skip 90% "NotKnown"
+        correct="NotKnown";
+      }
+      const names=chosen.map(k=>`<strong>${objectiveAliases[k]}</strong>`).join(', ');
+      const qText=`How many of the shown ciphers will always spawn?`;
+      out.push({
+        questionType:"subsetCount",
+        subset:chosen,
+        text:qText,
+        correctAnswer:correct,
+        subsetSize:subSize
       });
     }
   }
-  return result;
+  return out;
 }
 
-// For elaboration on group/subset questions, we might do simpler explanations
-function buildElaborateExplanation(q) {
-  if (q.questionType==="spawnCheck") {
-    // do your old spawn-check logic
+
+// Explanation
+function buildElaborateExplanation(q){
+  if(q.questionType==="spawnCheck"){
     return buildSpawnCheckElaboration(q);
-  } else if (q.questionType==="groupCount") {
-    // e.g. "2 out of 4 from Shack always spawn" 
-    const g = groups[q.groupKey];
+  } else if(q.questionType==="groupCount"){
+    const g=groups[q.groupKey];
     return `${g.forcedCount} out of ${g.members.length} ciphers always spawn in ${g.label}`;
   } else {
     // subsetCount
-    if (typeof q.correctAnswer==="number") {
-      return `Out of the shown ciphers, ${q.correctAnswer} will always spawn`;
+    if(typeof q.correctAnswer==="number"){
+      return `Exactly ${q.correctAnswer} of the shown ciphers will always spawn`;
     } else {
-      return `The number changes for each layout`;
+      return `The number of shown ciphers varies per layout, so no fixed number`;
     }
   }
 }
 
-// The old “spawn-check” explanation
-function buildSpawnCheckElaboration(question) {
-  const { conditionStates, resultObj, matchingLayouts } = question;
-  const totalMatches = matchingLayouts.length;
-  // how many also have the result objective=1
-  const matchCount = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
+// *** Condition Minimization ***
+// We find a minimal subset of conditionStates that yields the same matchingLayouts.
+function simplifyConditions(question) {
+  const { conditionStates, matchingLayouts } = question;
+  if(!conditionStates) return conditionStates; // for group questions, no condition
 
-  // condition phrase
-  const condParts = Object.keys(conditionStates).map(key => {
-    const alias = `<strong>${objectiveAliases[key]}</strong>`;
-    return conditionStates[key] === 1
-      ? `${alias} spawns`
-      : `${alias} doesn't spawn`;
-  });
-  const whenPhrase = (condParts.length>0)
-    ? ' when ' + condParts.join(' and ')
-    : '';
-  
-  // capitalized result alias
-  const rawAlias = objectiveAliases[resultObj];
-  const capAlias = rawAlias.charAt(0).toUpperCase() + rawAlias.slice(1);
-  const resultAlias = `<strong>${capAlias}</strong>`;
+  const condArr = Object.entries(conditionStates); 
+  // e.g. [ [A,1], [B,1], [L,1] ]
 
-  const ratio = matchCount / totalMatches;
-  if (ratio===1) {
-    return `${resultAlias} always spawns${whenPhrase}`;
-  } else if (ratio===0) {
-    return `${resultAlias} never spawns${whenPhrase}`;
-  } else {
-    const pct = Math.round(ratio*100);
-    return `${resultAlias} has a ${pct}% chance to spawn${whenPhrase}`;
+  // if only 1 condition or 0 => no simplification needed
+  if(condArr.length<=1) return conditionStates;
+
+  // We'll do a BFS approach (or we can do a simple "check all subsets" approach).
+  // But if you have up to 3 conditions, it's feasible to check all subsets quickly.
+
+  // find the set of layout indices that match the full condition
+  const requiredSet = new Set(
+    matchingLayouts.map(ly=>layouts.indexOf(ly))  // indexes of the global layouts array
+  );
+
+  // We'll gather all subsets of condArr (except empty) in ascending size
+  // the first subset that yields the same matching set => minimal
+  const subsets = getAllSubsets(condArr).sort((a,b)=>a.length - b.length); 
+  // skip empty
+  for(let sb of subsets){
+    if(sb.length===0) continue;
+
+    // check if this subset alone yields the same set
+    const testStates = {};
+    sb.forEach(([k,v])=> testStates[k]=v);
+
+    const testMatching = layouts.filter(ly=>
+      Object.entries(testStates).every(([kk,vv])=> ly[kk]===vv)
+    );
+    // see if their indexes match requiredSet
+    const testSet = new Set(testMatching.map(ly=>layouts.indexOf(ly)));
+
+    if(setsAreEqual(requiredSet,testSet)){
+      // found a smaller subset
+      // return it as an object
+      const subObj = {};
+      sb.forEach(([k,v])=> subObj[k]=v);
+      return subObj;
+    }
   }
+  // if nothing smaller works, return original
+  return conditionStates;
+}
+
+// returns an array of all subsets of arr. Each subset is an array of items from arr.
+function getAllSubsets(arr) {
+  // we can do a standard bitmask approach
+  const subsets=[];
+  const n=arr.length;
+  const total=(1<<n); // 2^n
+  for(let mask=0; mask<total; mask++){
+    const subset=[];
+    for(let i=0;i<n;i++){
+      if(mask & (1<<i)) subset.push(arr[i]);
+    }
+    subsets.push(subset);
+  }
+  return subsets;
+}
+
+function setsAreEqual(s1,s2){
+  if(s1.size!==s2.size) return false;
+  for(let x of s1){
+    if(!s2.has(x)) return false;
+  }
+  return true;
+}
+
+/////////////////////////////////////////////////////////
+// Helper to reduce the spawn-check condition set
+/////////////////////////////////////////////////////////
+function reduceSpawnCondition(question) {
+  // question.conditionStates => e.g. {A:1, B:1, D:0} etc.
+  // question.matchingLayouts => all layouts that match
+  // question.resultObj => the objective in question
+  // We'll find minimal subset of conditions that preserve the same ratio
+  // plus a list of 'irrelevant' conditions.
+  
+  const { conditionStates, matchingLayouts, resultObj } = question;
+  
+  // Original ratio
+  const totalMatches = matchingLayouts.length;
+  const matchCount = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
+  const originalRatio = (totalMatches === 0) ? 0 : (matchCount / totalMatches);
+
+  // We'll store the conditions in an array for iterative removal
+  const condArray = Object.entries(conditionStates); 
+  // e.g. [ [A,1], [B,1], [D,0] ]
+  // Start with all conditions "in"
+  let minimal = condArray.slice(); 
+
+  // Function to filter layouts by a set of conditions
+  function filterLayouts(condPairs) {
+    return layouts.filter(ly => {
+      return condPairs.every(([objKey, val]) => ly[objKey] === val);
+    });
+  }
+
+  // We'll keep track of which conditions got removed
+  const removed = [];
+
+  // Try removing each condition in turn, see if ratio stays the same
+  // This is a simple iterative approach; a more advanced approach might do backtracking,
+  // but typically this is enough to illustrate the idea.
+  for (let i = 0; i < minimal.length; i++) {
+    const testCond = minimal[i]; 
+    // Remove it
+    const withoutTest = [...minimal.slice(0,i), ...minimal.slice(i+1)];
+    const newMatch = filterLayouts(withoutTest);
+    if (newMatch.length === 0) {
+      continue; // can't remove it if that yields no matching layout 
+    }
+    const newCount = newMatch.filter(ly => ly[resultObj] === 1).length;
+    const newRatio = newCount / newMatch.length;
+
+    if (Math.abs(newRatio - originalRatio) < 1e-9) {
+      // Ratio is unchanged => condition is irrelevant
+      removed.push(testCond);
+      minimal.splice(i,1); 
+      i--; // adjust index because we removed an element
+    }
+  }
+
+  // minimal => final subset
+  // removed => irrelevant conditions
+  return { minimal, removed };
+}
+
+function reduceSpawnCondition(question) {
+  // 1) Gather initial data
+  const { conditionStates, matchingLayouts, resultObj } = question;
+  const totalMatches = matchingLayouts.length;
+  if (totalMatches === 0) {
+    // No matching layouts => can't reduce
+    return {
+      minimal: Object.entries(conditionStates),
+      removed: [],
+      steps: [] // no steps
+    };
+  }
+  // ratio with full condition
+  const matchCount = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
+  const originalRatio = matchCount / totalMatches;
+
+  // 2) Condition array (e.g. [ [A,1], [B,1], [D,0] ])
+  let minimal = Object.entries(conditionStates);
+  const removed = [];
+  const steps = [];
+
+  // small utility to filter layouts by a set of cond pairs
+  function filterLayouts(condPairs) {
+    return layouts.filter(ly => {
+      return condPairs.every(([objKey, val]) => ly[objKey] === val);
+    });
+  }
+
+  // 3) Iterate
+  let i = 0;
+  while (i < minimal.length) {
+    const testCond = minimal[i];
+    // "Temporarily" remove it
+    const withoutThis = [...minimal.slice(0,i), ...minimal.slice(i+1)];
+    const newMatch = filterLayouts(withoutThis);
+    if (newMatch.length === 0) {
+      // removing this condition yields no matching layout => we can't remove it
+      i++;
+      continue;
+    }
+    const newCount = newMatch.filter(ly => ly[resultObj] === 1).length;
+    const newRatio = newCount / newMatch.length;
+
+    if (Math.abs(newRatio - originalRatio) < 1e-9) {
+      // ratio unchanged => condition is irrelevant
+      removed.push(testCond);
+
+      // record a step describing the removal
+      steps.push({
+        removedCond: testCond,
+        newSet: withoutThis.slice(), // copy
+        ratio: newRatio
+      });
+
+      // actually remove from minimal
+      minimal.splice(i,1);
+      // do NOT increment i => we want to re-check same i index next loop
+    } else {
+      i++;
+    }
+  }
+
+  return { minimal, removed, steps };
 }
 
 
-// Utility functions
+/////////////////////////////////////////////////////////
+// Updated spawn-check explanation with condition reduction
+/////////////////////////////////////////////////////////
+//////////////////////////////////////////
+// 1) A helper to find all minimal subsets
+//    that preserve the spawn ratio
+//////////////////////////////////////////
+function findAllMinimalSubsets(question) {
+  const { conditionStates, matchingLayouts, resultObj } = question;
+
+  // If no matching layouts, there's no ratio to preserve
+  const totalMatches = matchingLayouts.length;
+  if (totalMatches === 0) return [];
+
+  // Original ratio
+  const originalMatchCount = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
+  const originalRatio = originalMatchCount / totalMatches;
+
+  // Convert conditionStates => array of [key, value], e.g. [ [A,1], [B,0], ... ]
+  const condArray = Object.entries(conditionStates);
+
+  // We'll search all subsets from smallest to largest, stop once we find some valid subsets of a given size
+  // This ensures we only get the truly minimal cardinality subsets.
+  const n = condArray.length;
+  let results = [];
+
+  // filterLayouts: returns the subset of the 5 main layouts that match a given subset of conditions
+  function filterLayouts(subset) {
+    return layouts.filter(ly => {
+      return subset.every(([objKey, val]) => ly[objKey] === val);
+    });
+  }
+
+  // We'll do a backtracking approach to generate subsets in ascending size
+  let foundMinSize = null;    // track the minimal size we found so far
+  let foundSubsets = [];      // store subsets of minimal size
+
+  function backtrack(startIndex, currentSubset) {
+    const currSize = currentSubset.length;
+
+    // If we already found a minimal size, and our currentSubset is bigger, we skip
+    if (foundMinSize !== null && currSize > foundMinSize) {
+      return;
+    }
+
+    // Check the ratio with the current subset
+    const subsetLayouts = filterLayouts(currentSubset);
+    if (subsetLayouts.length > 0) {
+      const matchCnt = subsetLayouts.filter(ly => ly[resultObj] === 1).length;
+      const ratio = matchCnt / subsetLayouts.length;
+      const sameRatio = Math.abs(ratio - originalRatio) < 1e-9;
+
+      if (sameRatio) {
+        // We have a valid subset
+        // if we haven't found any yet, this defines a new minimal size
+        if (foundMinSize === null || currSize < foundMinSize) {
+          foundMinSize = currSize;
+          foundSubsets = [ currentSubset.slice() ]; // copy
+        } else if (currSize === foundMinSize) {
+          // same minimal size => add it
+          foundSubsets.push(currentSubset.slice());
+        }
+      }
+    }
+
+    // If we found a minimal size already and current size == foundMinSize,
+    // any bigger subset won't help. So we can stop adding more elements.
+    if (foundMinSize !== null && currSize === foundMinSize) {
+      return;
+    }
+
+    // Otherwise continue adding elements
+    for (let i = startIndex; i < n; i++) {
+      currentSubset.push(condArray[i]);
+      backtrack(i+1, currentSubset);
+      currentSubset.pop();
+    }
+  }
+
+  // generate subsets in ascending cardinality
+  backtrack(0, []);
+
+  // foundSubsets => all minimal subsets that yield the same ratio
+  return foundSubsets;
+}
+
+
+///////////////////////////////////////
+// 2) A new spawn-check elaboration
+//    that uses findAllMinimalSubsets
+///////////////////////////////////////
+function buildSpawnCheckElaboration(question) {
+  const { conditionStates, matchingLayouts, resultObj } = question;
+
+  // If no matching layouts, no ratio
+  const totalMatches = matchingLayouts.length;
+  if (totalMatches === 0) {
+    return "No layout matches these conditions.";
+  }
+
+  // ratio
+  const matchCount = matchingLayouts.filter(ly => ly[resultObj] === 1).length;
+  const ratio = matchCount / totalMatches;
+
+  // find all minimal subsets
+  const allMinSubs = findAllMinimalSubsets(question);
+
+  // Convert ratio => textual phrase
+  // (like your original logic: always spawns, never spawns, or X% chance)
+  let ratioPhrase = "";
+  if (ratio === 1) {
+    ratioPhrase = "always spawns";
+  } else if (ratio === 0) {
+    ratioPhrase = "never spawns";
+  } else {
+    const pct = Math.round(ratio * 100);
+    ratioPhrase = `has a ${pct}% chance to spawn`;
+  }
+
+  // The result objective name
+  const rawAlias = objectiveAliases[resultObj];
+  const capAlias = rawAlias.charAt(0).toUpperCase() + rawAlias.slice(1);
+  const resultName = `<strong>${capAlias}</strong>`;
+
+  // We'll produce a statement for each minimal subset
+  // e.g. "Inside factory never spawns when outside factory spawns, regardless of middle spawns and no man's spawns"
+  // or if subset is empty => "Inside factory always spawns, regardless of ..."
+
+  // We'll accumulate them in an array of strings, then join them with <br> or bullet points
+  let statements = [];
+
+  for (let subset of allMinSubs) {
+    // subset = array of [objKey, val], minimal
+    // the rest = conditions that were not in the subset, i.e. the difference from question.conditionStates
+    const subsetKeys = new Set(subset.map(([k,_]) => k));
+    let mainParts = subset.map(([objKey,val]) => {
+      const alias=`<strong>${objectiveAliases[objKey]}</strong>`;
+      return val===1 ? `${alias} spawns` : `${alias} doesn't spawn`;
+    });
+    // grammar with commas and "and"
+    let mainCond = "";
+    if (mainParts.length===1) {
+      mainCond = mainParts[0];
+    } else if (mainParts.length>1) {
+      const last = mainParts.pop();
+      mainCond = mainParts.join(", ") + " and " + last;
+    }
+
+    // The "removed" conditions
+    let removed = [];
+    for (const [k,v] of Object.entries(conditionStates)) {
+      if (!subsetKeys.has(k)) {
+        const alias=`<strong>${objectiveAliases[k]}</strong>`;
+        removed.push( v===1 ? `${alias} spawns` : `${alias} doesn't spawn`);
+      }
+    }
+    let removedNote = "";
+    if (removed.length>0) {
+      if (removed.length===1) {
+        removedNote = `, regardless of ${removed[0]}`.replaceAll('spawns', 'spawning');
+      } else {
+        const rLast=removed.pop();
+        removedNote = `, regardless of ${removed.join(", ")} and ${rLast}`.replaceAll('spawns', 'spawning');
+      }
+    }
+
+    // Build the final statement for this subset
+    if (ratio===1) {
+      // "X always spawns when subset..., regardless of..."
+      if (mainCond) {
+        statements.push(`${resultName} ${ratioPhrase} when ${mainCond}`);
+      } else {
+        // empty subset => no condition
+        statements.push(`${resultName} ${ratioPhrase}`);
+      }
+    } else if (ratio===0) {
+      // "X never spawns when subset..."
+      if (mainCond) {
+        statements.push(`${resultName} ${ratioPhrase} when ${mainCond}`);
+      } else {
+        statements.push(`${resultName} ${ratioPhrase}`);
+      }
+    } else {
+      // partial ratio => "X has a xx% chance to spawn when subset..."
+      if (mainCond) {
+        statements.push(`${resultName} ${ratioPhrase} when ${mainCond}`);
+      } else {
+        statements.push(`${resultName} ${ratioPhrase}`);
+      }
+    }
+  }
+
+  // Possibly we want to list them
+  // If there's only one minimal subset, we just return it
+  if (statements.length === 1) {
+    return statements[0];
+  }
+  // If multiple, we can join them with line breaks or bullets
+  return statements.map(s => `• ${s}`).join("<br>");
+}
+
+
+
+// Basic utilities
 function getRandomInt(min,max){
   return Math.floor(Math.random()*(max-min+1))+min;
 }
-function shuffleArray(arr) {
-  for (let i=arr.length-1; i>0; i--){
+function shuffleArray(arr){
+  for(let i=arr.length-1; i>0;i--){
     const j=Math.floor(Math.random()*(i+1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+    [arr[i],arr[j]]=[arr[j],arr[i]];
   }
   return arr;
 }
 
-// -------------------------
-// 3) Main quiz logic
-// -------------------------
-let questions = generateAllQuestions(TOTAL_QUESTIONS);
-let currentQuestionIndex=0;
-let questionAnswered=false;
+// 3) Main Logic
+let questions=generateAllQuestions(TOTAL_QUESTIONS);
+let currentQuestionIndex=0, questionAnswered=false;
 
-const scoreDisplay = document.getElementById('scoreDisplay');
-const mainMapContainer = document.getElementById('mainMapContainer');
-const questionTextEl = document.getElementById('questionText');
-const resultDiv = document.getElementById('resultDiv');
-const nextQuestionBtn = document.getElementById('nextQuestionBtn');
-const matchingLayoutsContainer = document.getElementById('matchingLayoutsContainer');
+const scoreDisplay=document.getElementById('scoreDisplay');
+const mainMapContainer=document.getElementById('mainMapContainer');
+const questionTextEl=document.getElementById('questionText');
+const resultDiv=document.getElementById('resultDiv');
+const nextQuestionBtn=document.getElementById('nextQuestionBtn');
+const matchingLayoutsContainer=document.getElementById('matchingLayoutsContainer');
 
-// We have 2 answer rows: T/F/Not known => #answersTFRow
-//                        numeric => #answersNumRow
-const answersTFRow = document.getElementById('answersTFRow');
-const answersNumRow = document.getElementById('answersNumRow');
+const answersTFRow=document.getElementById('answersTFRow');
+const answersNumRow=document.getElementById('answersNumRow');
 
-// Pre-populate numeric row with 0..4 plus "Not known"
-// or you can do 0..6 etc. depending on how large subsets can get
-// We'll do up to 4 plus a "Not known"
+// Pre-populate numeric row 0..4 + "Not known"
 function setupNumericRow() {
-  answersNumRow.innerHTML = '';
-  for (let i=0; i<=4; i++) {
-    const btn = document.createElement('button');
+  answersNumRow.innerHTML='';
+  for(let i=0;i<=4;i++){
+    const btn=document.createElement('button');
     btn.classList.add('answer-btn','answer-num-btn');
-    btn.textContent = i;
-    btn.dataset.answer = ""+i; 
+    btn.textContent=''+i;
+    btn.dataset.answer=''+i;
     answersNumRow.appendChild(btn);
   }
-  // plus Not known
-  const notKnownBtn = document.createElement('button');
-  notKnownBtn.classList.add('answer-btn','answer-num-btn');
-  notKnownBtn.textContent = "Not known";
-  notKnownBtn.dataset.answer = "NotKnown";
-  answersNumRow.appendChild(notKnownBtn);
+  const notKBtn=document.createElement('button');
+  notKBtn.classList.add('answer-btn','answer-num-btn');
+  notKBtn.textContent='Not known';
+  notKBtn.dataset.answer='NotKnown';
+  answersNumRow.appendChild(notKBtn);
 }
-setupNumericRow(); // do once at start
+setupNumericRow();
 
-// Add event listeners to numeric row
-answersNumRow.querySelectorAll('.answer-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    if (questionAnswered) return;
+// Add events to numeric row
+answersNumRow.querySelectorAll('.answer-btn').forEach(btn=>{
+  btn.addEventListener('click', e=>{
+    if(questionAnswered) return;
+    checkAnswer(e.currentTarget.dataset.answer);
+  });
+});
+// T/F row
+answersTFRow.querySelectorAll('.answer-btn').forEach(btn=>{
+  btn.addEventListener('click', e=>{
+    if(questionAnswered) return;
     checkAnswer(e.currentTarget.dataset.answer);
   });
 });
 
-// Add event listeners to T/F/Not known row
-answersTFRow.querySelectorAll('.answer-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    if (questionAnswered) return;
-    checkAnswer(e.currentTarget.dataset.answer);
-  });
-});
-
-// show first question
 showQuestion(0);
 
-nextQuestionBtn.addEventListener('click', () => {
+nextQuestionBtn.addEventListener('click', ()=>{
   currentQuestionIndex++;
-  if (currentQuestionIndex < questions.length) {
+  if(currentQuestionIndex<questions.length){
     showQuestion(currentQuestionIndex);
   } else {
-    // end quiz
-    questionTextEl.innerHTML = `Quiz complete! You scored ${currentScore} / ${TOTAL_QUESTIONS}`;
+    // end
+    questionTextEl.innerHTML=`Quiz complete! You scored ${currentScore} / ${TOTAL_QUESTIONS}`;
     mainMapContainer.classList.add('hidden');
     answersTFRow.classList.add('hidden');
     answersNumRow.classList.add('hidden');
@@ -536,173 +816,141 @@ nextQuestionBtn.addEventListener('click', () => {
   }
 });
 
-function showQuestion(qIndex) {
+function showQuestion(idx){
   questionAnswered=false;
-  resultDiv.textContent = '';
+  resultDiv.textContent='';
   resultDiv.classList.add('hidden');
   nextQuestionBtn.classList.add('hidden');
-  matchingLayoutsContainer.innerHTML = '';
+  matchingLayoutsContainer.innerHTML='';
   matchingLayoutsContainer.classList.add('hidden');
 
-  const q = questions[qIndex];
-  questionTextEl.innerHTML = `Question ${qIndex+1}: ${q.text}`;
+  const q=questions[idx];
+  questionTextEl.innerHTML=`Question ${idx+1}: ${q.text}`;
 
-  // Depending on questionType, show T/F or numeric row
-  if (q.questionType==="spawnCheck") {
+  if(q.questionType==="spawnCheck"){
     answersTFRow.classList.remove('hidden');
     answersNumRow.classList.add('hidden');
   } else {
-    // groupCount or subsetCount => we expect numeric answers
     answersTFRow.classList.add('hidden');
     answersNumRow.classList.remove('hidden');
   }
-
-  // If it's spawnCheck, we can show a map with condition icons + question icon
-  // If it's groupCount or subsetCount, we can show question icons for the relevant group or subset
+  // render icons
   clearIcons(mainMapContainer);
   renderMapIcons(q);
 }
 
-// Different ways to show icons
-function renderMapIcons(question) {
-  const mainMapImg = document.getElementById('mapImage');
-  if (!mainMapImg.complete) {
-    mainMapImg.addEventListener('load', () => doRenderIcons(question), {once:true});
-  } else {
-    doRenderIcons(question);
-  }
+function renderMapIcons(q){
+  const mainMapImg=document.getElementById('mapImage');
+  if(!mainMapImg.complete){
+    mainMapImg.addEventListener('load',()=>doRenderIcons(q), {once:true});
+  } else doRenderIcons(q);
 }
-
-function doRenderIcons(q) {
-  const scale = document.getElementById('mapImage').clientWidth / 1012;
-  // for spawnCheck => condition + result
-  if (q.questionType==="spawnCheck") {
-    // condition
-    for (const [objKey,spawnState] of Object.entries(q.conditionStates)) {
-      const iconName = (spawnState===1)? 'icon.png':'icon_absent.png';
-      addIcon(mainMapContainer,objKey,iconName,scale);
+function doRenderIcons(q){
+  const scale= document.getElementById('mapImage').clientWidth / 1012;
+  if(q.questionType==="spawnCheck"){
+    for(const [k,v] of Object.entries(q.conditionStates)){
+      const iconFile=(v===1)?'icon.png':'icon_absent.png';
+      addIcon(mainMapContainer,k,iconFile,scale);
     }
-    // questioned
     addIcon(mainMapContainer,q.resultObj,'icon_question.png',scale);
   }
-  else if (q.questionType==="groupCount") {
-    // show group members with question icons
-    // plus you can show other objectives as absent or hidden if you want, or just omit them
-    const { groupKey } = q;
-    const gInfo = groups[groupKey];
-    gInfo.members.forEach(m => {
-      addIcon(mainMapContainer, m, 'icon_question.png', scale);
+  else if(q.questionType==="groupCount"){
+    const g=groups[q.groupKey];
+    g.members.forEach(m=>{
+      addIcon(mainMapContainer,m,'icon_question.png',scale);
     });
   }
   else {
-    // subsetCount => place question icons for that subset
-    q.subset.forEach(m => {
-      addIcon(mainMapContainer, m, 'icon_question.png', scale);
+    // subsetCount
+    q.subset.forEach(m=>{
+      addIcon(mainMapContainer,m,'icon_question.png',scale);
     });
   }
 }
-
-function addIcon(container,objKey,imageFile,scale) {
-  const pos = objectivePositions[objKey];
-  if (!pos) return;
-  const icon = document.createElement('img');
-  icon.classList.add('objective-icon');
-  icon.src = imageFile;
-  icon.style.left = (pos.left*scale)+'px';
-  icon.style.top = (pos.top*scale)+'px';
-  container.appendChild(icon);
+function addIcon(container,obj,iconFile,scale){
+  const pos=objectivePositions[obj];
+  if(!pos) return;
+  const el=document.createElement('img');
+  el.classList.add('objective-icon');
+  el.src=iconFile;
+  el.style.left=(pos.left*scale)+'px';
+  el.style.top=(pos.top*scale)+'px';
+  container.appendChild(el);
 }
-
 function clearIcons(container){
-  container.querySelectorAll('.objective-icon').forEach(el => el.remove());
+  container.querySelectorAll('.objective-icon').forEach(el=>el.remove());
 }
 
-// Evaluate answer
-function checkAnswer(userAnswer) {
+function checkAnswer(userAnswer){
   questionAnswered=true;
 
-  const q = questions[currentQuestionIndex];
-  let correctAnswer = q.correctAnswer; // can be 'True','False','NotSure' or integer or 'NotKnown'
+  const q=questions[currentQuestionIndex];
+  let correct=q.correctAnswer;
+  if(correct==='NotKnown') correct='Not known';
 
-  // Convert our special 'NotKnown' => 'Not known' for display
-  if (correctAnswer==='NotKnown') correctAnswer='Not known';
-
-  // For spawnCheck => userAnswer is 'True','False','NotSure'
-  // For groupCount/subsetCount => userAnswer might be '0','1','2','3','4','NotKnown'
-
-  // If correct => +1 to score
-  let isCorrect = false;
-  if (q.questionType==="spawnCheck") {
-    // correctAnswer is T/F/NotSure
-    isCorrect = (userAnswer===q.correctAnswer);
+  let isCorrect=false;
+  if(q.questionType==="spawnCheck"){
+    isCorrect=(userAnswer===q.correctAnswer);
   } else {
-    // groupCount or subsetCount => correctAnswer is number or "NotKnown"
-    if (typeof q.correctAnswer==="number") {
-      // user must pick that number as a string
-      isCorrect = (userAnswer===String(q.correctAnswer));
+    // groupCount/subsetCount => numeric or 'NotKnown'
+    if(typeof q.correctAnswer==='number'){
+      isCorrect=(userAnswer===String(q.correctAnswer));
     } else {
-      // if correct answer is "Not known" or "NotKnown"
-      isCorrect = (userAnswer==="NotKnown" || userAnswer==="Not known");
+      // "NotKnown"
+      isCorrect=(userAnswer==="NotKnown"||userAnswer==="Not known");
     }
   }
 
-  // build explanation
-  const explanation = buildElaborateExplanation(q);
-  const explanationHtml = `<div style="color: black; margin-top:0.5rem;">${explanation}</div>`;
+  const explanation=buildElaborateExplanation(q);
+  const explanationHtml=`<div style="color:black; margin-top:0.5rem;">${explanation}</div>`;
 
-  if (isCorrect) {
+  if(isCorrect){
     currentScore++;
-    scoreDisplay.textContent = `Score: ${currentScore} / ${TOTAL_QUESTIONS}`;
-    resultDiv.innerHTML = `<span style="color: green;">Correct!</span>${explanationHtml}`;
+    scoreDisplay.textContent=`Score: ${currentScore} / ${TOTAL_QUESTIONS}`;
+    resultDiv.innerHTML=`<span style="color:green;">Correct!</span>${explanationHtml}`;
   } else {
-    resultDiv.innerHTML = `<span style="color: red;">Incorrect. Correct answer: ${correctAnswer}.</span>${explanationHtml}`;
+    resultDiv.innerHTML=`<span style="color:red;">Incorrect. Correct answer: ${correct}.</span>${explanationHtml}`;
   }
   resultDiv.classList.remove('hidden');
 
-  // show matching layouts if spawnCheck, or do nothing if group?
-  // For simplicity, let's always show "matching" for spawnCheck
-  if (q.questionType==="spawnCheck") {
+  if(q.questionType==="spawnCheck"){
     renderMatchingLayouts(q);
   } else {
-    // optionally do no matching layouts for group/subset question
     matchingLayoutsContainer.classList.add('hidden');
   }
-
   nextQuestionBtn.classList.remove('hidden');
 }
 
-// Show layouts for spawn-check
-function renderMatchingLayouts(question) {
-  matchingLayoutsContainer.innerHTML = '';
+// For spawnCheck, show matching layouts
+function renderMatchingLayouts(question){
+  matchingLayoutsContainer.innerHTML='';
   matchingLayoutsContainer.classList.remove('hidden');
-  const { matchingLayouts } = question;
-
+  const { matchingLayouts }=question;
   matchingLayouts.forEach((ly,idx)=>{
-    const previewDiv=document.createElement('div');
-    previewDiv.classList.add('layout-preview');
-    const label=document.createElement('h4');
-    label.textContent=`Possible layout ${idx+1}`;
-    previewDiv.appendChild(label);
+    const preview=document.createElement('div');
+    preview.classList.add('layout-preview');
+    const lab=document.createElement('h4');
+    lab.textContent=`Possible layout ${idx+1}`;
+    preview.appendChild(lab);
 
-    const mapContainer=document.createElement('div');
-    mapContainer.classList.add('map-container');
-    previewDiv.appendChild(mapContainer);
+    const mapC=document.createElement('div');
+    mapC.classList.add('map-container');
+    preview.appendChild(mapC);
 
     const mapImg=document.createElement('img');
     mapImg.classList.add('map-image');
     mapImg.src='maps/armsfactory.png';
-    mapContainer.appendChild(mapImg);
+    mapC.appendChild(mapImg);
 
     mapImg.addEventListener('load',()=>{
-      const sc = mapImg.clientWidth / 1012;
-      objectiveKeys.forEach(obj=>{
-        if (ly[obj]===1) {
-          addIcon(mapContainer,obj,'icon.png',sc);
+      const sc=mapImg.clientWidth/1012;
+      objectiveKeys.forEach(objKey=>{
+        if(ly[objKey]===1){
+          addIcon(mapC,objKey,'icon.png',sc);
         }
       });
     });
-
-    matchingLayoutsContainer.appendChild(previewDiv);
+    matchingLayoutsContainer.appendChild(preview);
   });
 }
 </script>
